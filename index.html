@@ -1,0 +1,810 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>卫戍协议 DPS 计算器 v1.11</title>
+<style>
+:root { color-scheme: dark; font: 14px/1.55 system-ui, sans-serif; background: #10151d; color: #e4eaf3; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 24px; max-width: 1500px; margin: auto; }
+h1 { font-size: 24px; margin: 0; }
+h2 { font-size: 17px; margin: 0 0 12px; }
+small, .sub { color: #98a8bd; }
+.tabs { display: flex; gap: 7px; margin-top: 14px; flex-wrap: wrap; }
+.tab-btn { background: #19212d; color: #98a8bd; border: 1px solid #2b3748; border-radius: 10px; padding: 7px 16px; font: inherit; cursor: pointer; }
+.tab-btn.active { background: #77dcc6; color: #10151d; font-weight: bold; }
+.pane { display: none; }
+.pane.active { display: block; }
+.layout { display: grid; grid-template-columns: 330px 1fr; gap: 20px; margin-top: 16px; }
+.panel { background: #19212d; border: 1px solid #2b3748; border-radius: 14px; padding: 18px; }
+.ctl { border-bottom: 1px solid #303b4b; padding: 6px 0; }
+.ctl:last-child { border-bottom: none; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+input[type=number] { background: #101722; color: #e4eaf3; border: 1px solid #46546a; border-radius: 7px; padding: 3px 6px; width: 70px; text-align: right; font: inherit; }
+input[type=range] { width: 100%; accent-color: #77dcc6; margin-top: 5px; }
+input[type=checkbox] { accent-color: #77dcc6; transform: scale(1.1); margin-right: 6px; }
+.toggle { display: inline-flex; align-items: center; cursor: pointer; }
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0; }
+.metric { padding: 12px; background: #101722; border-radius: 10px; }
+.metric strong { display: block; font-size: 22px; margin-top: 2px; }
+canvas { width: 100%; height: 300px; display: block; background: #101722; border-radius: 10px; margin-top: 14px; }
+.glob { display: flex; gap: 20px; align-items: center; margin-top: 12px; padding: 10px 18px; background: #19212d; border: 1px solid #2b3748; border-radius: 12px; flex-wrap: wrap; }
+/* 对比页 */
+.cmp-row { display: grid; grid-template-columns: 30px 120px minmax(80px, 1fr) 100px 100px 100px; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid #303b4b; font-variant-numeric: tabular-nums; }
+.cmp-row:last-child { border-bottom: none; }
+.cmp-row:not(.cmp-head):hover { background: #101722; cursor: pointer; }
+.cmp-head { color: #98a8bd; font-size: 12px; }
+.cmp-rank { color: #98a8bd; text-align: right; }
+.cmp-name { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-barwrap { background: #101722; border: 1px solid #2b3748; border-radius: 6px; height: 14px; overflow: hidden; }
+.cmp-bar { display: block; height: 100%; border-radius: 6px; }
+.cmp-num { text-align: right; }
+.ver { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: .3px; color: #77dcc6; background: #14251f; border: 1px solid #2f6f63; border-radius: 999px; padding: 2px 9px; vertical-align: middle; margin-left: 8px; }
+#cmp-list { overflow-x: auto; }
+</style>
+
+<header>
+  <small>ARKNIGHTS / 卫戍协议 · v1.11</small>
+  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.11</span></h1>
+  <div class="sub">16 名干员 · 全盟约 · 对比页 · 单文件离线可用 · <b style="color:#77dcc6">默认数据为 4 人终极难度</b></div>
+</header>
+
+<div class="glob">
+  <label>敌人防御 <input type="number" id="enemy-def" value="0" min="0" max="100000"></label>
+  <label>敌人法抗 <input type="number" id="enemy-res" value="0" min="0" max="100"></label>
+  <label>敌人生命 <input type="number" id="enemy-hp" value="6840000" min="0" max="99999999" style="width:110px;"></label>
+  <label class="toggle"><input type="checkbox" id="p3"> 3精准</label>
+  <label class="toggle"><input type="checkbox" id="a3"> 3奥术</label>
+  <label class="toggle"><input type="checkbox" id="j2"> 2绝技（攻+30%）</label>
+  <label class="toggle"><input type="checkbox" id="j5"> 5绝技（技力−30%）</label>
+  <label class="toggle"><input type="checkbox" id="a50"> 突袭≥50 层（全队攻速+50）</label>
+  <label class="toggle"><input type="checkbox" id="synclayers" checked> 层数一致化</label>
+  <label class="toggle"><input type="checkbox" id="cmode"> 对照模式（勾选显示变化%）</label>
+  <label>Boss 预设 <select id="boss" style="min-width:190px"></select><span class="sub" style="margin-left:4px">4 人终极难度（生命×4）</span></label>
+</div>
+
+<nav class="tabs" id="tabs"></nav>
+<div id="panes"></div>
+
+<script>
+const byId = (id) => document.getElementById(id);
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number(v) || 0));
+
+/* ===== 公共结算 ===== */
+function applyDef(dmg) {
+  let def = Math.max(Number(byId('enemy-def').value) || 0, 0);
+  if (byId('p3').checked) def *= 0.7;
+  return Math.max(dmg - def, dmg * 0.05);
+}
+function applyRes(dmg) {
+  let res = Math.max(Number(byId('enemy-res').value) || 0, 0);
+  if (byId('p3').checked) res *= 0.7;
+  if (byId('a3').checked) res -= 30 + 0.05 * _arcL;   // 3奥术：每次受伤 −1，至多 −(30+0.05×层数)
+  res = Math.min(Math.max(res, 0), 100);
+  return Math.max(dmg * (1 - res / 100), dmg * 0.05);
+}
+/* ===== 奥术统一：每段独立附加 ===== */
+let _arcR = 0;                                   // 每段奥术附伤倍率，update() 时按本页勾选刷新
+let _arcL = 0;                                   // 当前页奥术层数（3奥术减法抗用）
+function setArcR(st) { _arcR = st.on.arc ? (0.20 + 0.004 * st.L.arc) : 0; _arcL = st.L.arc; }   // 0 层勾选也有 20% 基础（用户确认）
+function arcExtra(segs, atk) {                    // segs 段，每段附加「攻击力 × 倍率」的法术伤害
+  return _arcR > 0 && segs > 0 ? applyRes(atk * segs * _arcR) : 0;
+}
+function interval20(baseSec, aspd, minF) {
+  const s = Math.min(600, 100 + aspd) / 100;
+  return Math.max(minF || 3, Math.round(baseSec * 20 / s)) / 20;
+}
+function cycle120(nDPS, sDPS, initSP, costSP, dur, regen, refund, extra) {
+  const r = regen > 0 ? regen : 1;
+  if (!(costSP > 0)) return sDPS;
+  // 稳态平均：一轮 = 充能时间 + 技能时间，避免 120s 窗口取整造成台阶
+  const need = Math.max(0, costSP - (refund || 0)) / r;
+  const cyc = need + dur;
+  if (!(cyc > 0)) return sDPS;
+  return (nDPS * need + sDPS * dur + (extra || 0)) / cyc;
+}
+
+/* ===== 全部盟约（层数全局共享） ===== */
+const COV = {
+  kaz:    { label: '卡西米尔', atk: l => 0.50 + 0.01 * l },
+  iberia: { label: '伊比利亚' },   // 效果是持续法术伤害（在蓝毒的计算里），不提供攻击力
+  ley:    { label: '莱塔尼亚', atk: l => 0.30 + 0.01 * l },
+  arc:    { label: '奥术' },
+  us:     { label: '乌萨斯', atk: l => 0.35 + 0.0075 * l },
+  vis:    { label: '远见' },   // 给钱，不影响 DPS；攻速加成只有逻各斯自己吃
+  sira:   { label: '叙拉古', aspd: l => 25 + 0.8 * l },
+  assault:{ label: '突袭', atk: l => 0.25 + 0.01 * l },   // 50 层的 +50 攻速是全队的，已独立到顶部全局按钮
+  precise:{ label: '精准', atk: l => 0.10 + 0.012 * l },
+  yan:    { label: '炎', atk: l => 0.23 + 0.009 * l },
+  ling:   { label: '灵巧', aspd: l => 10 + l },
+  vic:    { label: '维多利亚', mult: l => 1.25 + 0.008 * l },
+  she:    { label: '谢拉格', mult: l => 1.35 + 0.01 * l },
+  swift:  { label: '迅捷' },
+  sargon: { label: '萨尔贡（勾选自动+300攻速）', aspd: () => 300, flat: true }, // 勾选即 +300 攻速，不看层数
+};
+const KEYS = Object.keys(COV);
+const GEN = ['assault', 'precise', 'yan', 'ling', 'vic', 'she']; // 通用可勾选
+
+/* ===== 干员：use = 该干员吃到的盟约 ===== */
+const OPS = [
+  { id: 'm', name: '玛恩纳', color: '#77dcc6', use: ['kaz', ...GEN, 'sira', 'arc'],
+    defaultOn: ['kaz'],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔' }],
+    compute(s, d) {
+      const tri = true; // 默认精锐（三连）
+      const kz = (s._on && s._on.kaz) ? s.kaz : 0;
+      const base = (tri ? 390 : 331) + Math.floor(kz / 5) * (tri ? 20 : 10);
+      const atk = base * (1 + d.atkBonus + 2.0) * 1.1;
+      const si = interval20(1.2, d.aspd, 3);
+      const hits = Math.floor(26 / si);
+      const tr = atk * (tri ? 0.11 : 0.10) + (s._x.kaz6 ? atk * 0.65 : 0);
+      // 奥术：每次技能攻击 2 段（物理 + 真伤）
+      return { normalDPS: 0, skillDPS: ((applyDef(atk * (tri ? 1.5 : 1.25) * d.dmgMult)) + tr + arcExtra(2, atk)) * hits / 26,
+        initSP: tri ? 20 : 15, costSP: tri ? 45 : 50, dur: 26, atk };
+    },
+    formula: ['面板 = (390 + 20×floor(卡西米尔/5)) × (1 + 解放者200% + 攻击类盟约%) × 1.1',
+      '解放者：技能未开启不攻击（真空期 0）；攻速上限 600%；突袭 50 层的 +50 攻速已独立成顶部全局按钮（全队生效）',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；本干员每次技能攻击 2 段（物理 + 真伤）'] },
+  { id: 'b', name: '蓝毒', color: '#b48cff', use: ['iberia', ...GEN, 'arc'],
+    defaultOn: ['iberia'],
+    extras: [{ id: 'i6', label: '6 伊比利亚' }],
+    compute(s, d) {
+      const ib = (s._on && s._on.iberia) ? s.iberia : 0;
+      // 作战能力（本干员专属）：伊比利亚每层 +1% 攻击力
+      const atk = 576 * (1 + d.atkBonus + 0.01 * ib);
+      const dot = 75; // 神经毒素 75/s（默认常开）；伊比利亚的持续伤害由通用逻辑统一附加
+      const ni = interval20(1.0, d.aspd, 3);
+      // 奥术：直伤 1 段/次 + 毒 DoT 整条每秒 1 段（不随层数/6伊增加段数）
+      const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni + dot + arcExtra(1, atk);
+      // 二重射击（攻击回复，每 3 次攻击触发）：额外 155% 物理
+      const extra = applyDef(atk * 1.55 * d.dmgMult);
+      return { normalDPS, skillDPS: normalDPS, extra, initSP: 0, costSP: 3, dur: 0, atk, regen: 1 / ni };
+    },
+    formula: ['面板 = 576 × (1 + 攻击类盟约% + 作战能力：伊比利亚每层 +1%)',
+      '直伤：每 3 次攻击附加 155%；伊比利亚（需勾选，任意干员通用）：每秒受 层数×(11%+0.06%/层)×攻击力 的持续法术伤害（最多 10 层，按攻击间隔折算；6伊 ×2）+ 神经毒素 75/s（默认常开）',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；直伤 1 段 + 毒 DoT 每秒 1 段（不随层数增加）'] },
+  { id: 'x', name: '艾雅法拉', color: '#ffb079', use: ['ley', 'arc', ...GEN],
+    defaultOn: ['ley'],
+    extras: [],
+    compute(s, d) {
+      const arcL = (s._on && s._on.arc) ? s.arc : 0;
+      const leyL = (s._on && s._on.ley) ? s.ley : 0;
+      // 作战能力（本干员专属）：莱塔尼亚/奥术每层 +1% 攻击力、+0.02/s 技力回复
+      const atk = 713 * (1 + d.atkBonus + 0.14 + 0.01 * (leyL + arcL));
+      const sk = atk + 713 * 0.85;
+      const si = interval20(0.5, d.aspd, 3), ni = interval20(1.6, d.aspd, 3);
+      const hits = Math.floor(15 / si);
+      // 奥术：每段独立附加（普攻 1 段、火山每次 1 段）
+      return { normalDPS: (applyRes(atk * d.dmgMult) + arcExtra(1, atk)) / ni,
+        skillDPS: (applyRes(sk * d.dmgMult) + arcExtra(1, sk)) * hits / 15,
+        initSP: 51, costSP: 80, dur: 15, atk, regen: 1 + 0.02 * (leyL + arcL) };
+    },
+    formula: ['面板 = 713 × (1 + 攻击类盟约% + 炎息14% + 作战能力：莱塔尼亚/奥术每层 +1%)；火山技能 +85% 攻（加算）',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)，普攻 1 段、火山 1 段；技力回复 1 + 0.02×(莱塔尼亚+奥术)/秒'] },
+  { id: 'v', name: '维伊', color: '#ff7b9c', use: ['us', ...GEN, 'sira', 'arc'],
+    defaultOn: ['us'],
+    extras: [],
+    compute(s, d) {
+      const atkBase = 1405 * (1 + d.atkBonus + 0.10);
+      const usL = (s._on && s._on.us) ? s.us : 0;   // 作战能力：乌萨斯每层 +1 攻速
+      const dot = 540; // 战争技艺 DoT 默认常开（90/s × 6 层）
+      // 奥术：直伤 1 段/次；DoT 整条每秒 1 段（不随层数增加）
+      const arcDot = arcExtra(1, atkBase);
+      let st = 0, t = 0, dmg = 0, n = 0;
+      while (t < 28 && n++ < 300) {
+        const a = atkBase * (1 + 0.11 * st);
+        dmg += applyRes(a * d.dmgMult) + arcExtra(1, a); st = Math.min(st + 1, 9);
+        t += interval20(2.5, d.aspd + 30 + 7 * st + usL, 3);
+      }
+      const ni = interval20(3.0, d.aspd + 30 + usL, 3);
+      return { normalDPS: (applyRes(atkBase * d.dmgMult) + arcExtra(1, atkBase)) / ni + dot + arcDot, skillDPS: dmg / 28 + dot + arcDot, initSP: 6, costSP: 34, dur: 28, atk: atkBase };
+    },
+    formula: ['面板 = 1405 × (1 + 攻击类盟约% + 转置10%)',
+      '技能 Lv7：间隔 2.5s，每次攻击 +11% 攻 / +7 攻速（最多 9 层），28s；战争技艺 DoT 90/s×6 层（默认常开）；作战能力：乌萨斯每层 +1 攻速',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；直伤 1 段/次 + DoT 每秒 1 段（不随层数增加）'] },
+  { id: 'c', name: '火陈', color: '#ff6b6b', use: ['yan', ...GEN, 'arc'],
+    defaultOn: ['yan'],
+    extras: [],
+    compute(s, d) {
+      const atk = 723 * (1 + d.atkBonus + 0.13);
+      const si = interval20(1.25, d.aspd + 13 + 8 + 60, 4);
+      const ni = interval20(1.25, d.aspd + 13 + 8, 4);
+      const weak = (x) => Math.max(applyDef(x), applyRes(x));
+      const hits = Math.floor(20 / si);
+      // 每次攻击：3 次 × 180%，实际仍按弱点伤害结算（物理/法术取高）；剑气忽略不计
+      const perAttack = weak(atk * 1.80 * 3 * d.dmgMult);
+      // 奥术：每段独立附加（普攻 1 段；技能每次攻击 3 段）
+      return { normalDPS: (weak(atk * d.dmgMult) + arcExtra(1, atk)) / ni,
+        skillDPS: (perAttack + arcExtra(3, atk)) * hits / 20,
+        initSP: 15, costSP: 28, dur: 20, atk };
+    },
+    formula: ['面板 = 723 × (1 + 攻击类盟约% + 形意洞照13%)',
+      '弱点伤害：自动取物理/法术较高者；军师的手段 18s、攻速+60、3 段×170%；剑气 5.5×攻击',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；普攻 1 段、技能每次攻击 3 段'] },
+  { id: 'l', name: '逻各斯', color: '#71aaff', use: ['vis', 'arc', ...GEN],
+    defaultOn: ['vis', 'arc'],
+    extras: [],
+    compute(s, d) {
+      const arcL = (s._on && s._on.arc) ? s.arc : 0;
+      const visL = (s._on && s._on.vis) ? s.vis : 0;
+      const atk = 791 * (1 + d.atkBonus);
+      const trait = 2 * Math.floor((visL + arcL) / 3);   // 远见的攻速只有逻各斯吃（其他人只吃给钱）
+      const si = interval20(1.6, d.aspd + trait, 3);
+      const evo = 0.4 * 0.7 * 2;
+      const hits = Math.floor(30 / si);
+      // 奥术：每段独立附加（普攻 1 段、技能每次 1 段）
+      return { normalDPS: (applyRes((atk + 165 + evo * atk) * d.dmgMult) + arcExtra(1, atk)) / si,
+        skillDPS: (applyRes(((atk * 3.2) + 165 + evo * atk * 3.2) * d.dmgMult) + arcExtra(1, atk)) * hits / 30,
+        initSP: 18, costSP: 45, dur: 30, atk, regen: 1 + 1 / si };
+    },
+    formula: ['面板 = 791 × (1 + 攻击类盟约%)；延异视阈 技能伤害 +220%',
+      '攻速 = 2×floor((远见+奥术)/3) + 灵巧（远见的攻速只有逻各斯吃，其他人只吃给钱）；殂魂具辞 +165；语汇演化 40%×70%×2',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)，普攻 1 段、技能 1 段'] },
+  { id: 'e', name: '贝洛内', color: '#ffd166', use: ['sira', 'assault', ...GEN, 'arc'],
+    defaultOn: ['sira'],
+    extras: [{ id: 'sira6', label: '6 叙拉古（异常真伤 800+10×层）' }],
+    compute(s, d) {
+      const atk = 616 * (1 + 0.02 * Math.floor((s.sira + s.assault) / 3) + d.atkBonus);
+      const aspd = 10 + (25 + 0.8 * s.sira);
+      const si = interval20(0.78, d.aspd + aspd + 60, 3);
+      const ni = interval20(0.78, d.aspd + aspd, 3);
+      const hits = Math.floor(18 / si);
+      const s6 = (s._x.sira6 && s._on.sira) ? (800 + 10 * s.sira) : 0;
+      // 奥术：每段独立附加（1 段/次攻击）
+      return { normalDPS: (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni + s6, skillDPS: (applyDef(atk * 1.7 * d.dmgMult) + arcExtra(1, atk)) * hits / 18 + s6, initSP: 14, costSP: 26, dur: 18, atk };
+    },
+    formula: ['面板 = 616 × (1 + 攻击类盟约% + 2%×floor((叙拉古+突袭)/3))',
+      '叙拉古攻速 25+0.8/层；斗士 +10；军师的手段 18s、攻速+60、170%',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)，1 段/次攻击'] },
+  { id: 'zh', name: '烛煌', color: '#ff9f43',
+    use: ['yan', 'vic', 'assault', 'precise', 'ling', 'she', 'arc'],
+    defaultOn: ['yan', 'vic'],
+    swift: true,                       // 天生迅捷干员：默认回技力，不显示勾选框
+    extras: [{ id: 'burst', label: '一直爆条（10s 一次灼燃爆发）' }],
+    compute(s, d) {
+      const on = !!s._x.burst;
+      const atk = 779 * (1 + d.atkBonus + (on ? 0.10 : 0)); // 熔点引爆：10s 内攻击 +10%
+      const ni = interval20(1.6, d.aspd, 3);
+      const burstDPS = on ? (atk * 4.20 + 7000) / 10 : 0; // 每 10s 爆发：420%攻 + 7000 元素（真实伤害）
+      const skAtk = atk * 1.85;
+      const ssi = interval20(0.3, d.aspd, 3); // 攻击间隔 -1.3（1.6 → 0.3s）
+      // 奥术：每段独立附加（主攻 1 段；爆条时元素 70% 再 1 段）
+      const arcSegs = on ? 2 : 1;
+      // 70% 元素伤害 = 真实伤害（无视防御/法抗）；不爆条则不触发
+      const perShot = applyRes(skAtk * (on ? 1.10 : 1) * d.dmgMult) + (on ? skAtk * 0.70 : 0);
+      return { normalDPS: (applyRes(atk * (on ? 1.10 : 1) * d.dmgMult) + arcExtra(arcSegs, atk)) / ni + burstDPS,
+        skillDPS: (perShot + arcExtra(arcSegs, skAtk)) / ssi + burstDPS, initSP: 16, costSP: 34, dur: Math.ceil(ssi * 21), atk };
+    },
+    formula: ['面板 = 779 × (1 + 攻击类盟约% + 熔点引爆10%)；技能3 +85% 攻',
+      '技能3：+85% 攻、间隔 -1.3（1.6→0.3s）、21 发；爆条时 +10% 攻、伤害 ×1.1、额外 70% 元素（真实伤害）、每 10s 一次 420%攻+7000 元素',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；主攻 1 段，爆条时元素 70% 再 1 段（共 2 段）',
+      '天生迅捷干员：技能结束概率回技力默认生效（页面不显示迅捷勾选框）'] },
+  { id: 'qb', name: '仇白', color: '#9be15d',
+    use: ['yan', 'assault', 'precise', 'ling', 'she', 'arc'],
+    defaultOn: ['yan'],
+    extras: [{ id: 'bound', label: '目标处于束缚/停顿（入隙 +40%）' }],
+    compute(s, d) {
+      const atk = 778 * (1 + d.atkBonus);
+      const ni = interval20(1.3, d.aspd, 3);
+      const bound = !!s._x.bound;
+      const phys = applyDef(atk * d.dmgMult);                                   // 物理 100%
+      const arts = applyRes(atk * (0.10 + (bound ? 0.40 : 0)) * d.dmgMult);      // 附魔 10% + 入隙 40%
+      const normalDPS = (phys + arts) / ni;
+      // 奥术：每段独立附加，一轮 6 段（4 次普攻×1 段 + 留羽 2 段）；模组 10% 是「预计算附加」，不单独触发
+      const arcHits = 4 * 1 + 2;
+      const extra = applyRes(atk * 2.40 * d.dmgMult) + arcExtra(arcHits, atk);
+      return { normalDPS, skillDPS: normalDPS, extra, initSP: 0, costSP: 5, dur: 0, atk, regen: 1 / ni };
+    },
+    formula: ['面板 = 778 × (1 + 攻击类盟约%)',
+      '普攻：物理 100% + 模组附加 10%（预计算，不触发奥术）+ 入隙 40%（束缚/停顿）；留羽：每 5 次攻击触发 240% 法伤（攻击回复）',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；一轮 6 段（4 次普攻×1 段 + 留羽 2 段；模组 10% 附加不触发）'] },
+  { id: 'pp', name: '佩佩', color: '#ff8fab',
+    use: ['yan', 'sargon', 'assault', 'precise', 'ling', 'she', 'arc'],
+    defaultOn: ['sargon'],
+    extras: [{ id: 'splash', label: '溅射≥3 敌（当次攻击 115%）' }],
+    compute(s, d) {
+      const atk = 1307 * (1 + d.atkBonus + 0.16); // 弥漫莲香：近卫 +16%
+      const ni = interval20(1.8, d.aspd, 3);
+      // 奥术：每段独立附加（普攻 1 段、技能每次攻击 1 段）
+      const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni;
+      // 技能：40s、+180% 攻、每次攻击额外 +16%（最多 4 层）、间隔略微增大（暂按 2.0s）
+      const si = interval20(2.0, d.aspd, 3);
+      let t = 0, dmg = 0, n = 0;
+      while (t < 40 && n++ < 200) {
+        const stacks = Math.min(4, n);
+        const atkNow = atk * (1 + 1.80 + 0.16 * stacks);
+        const a = atkNow * (s._x.splash ? 1.15 : 1);
+        dmg += applyDef(a * d.dmgMult) + arcExtra(1, atkNow);
+        t += si;
+      }
+      return { normalDPS, skillDPS: dmg / 40, initSP: 32, costSP: 51, dur: 40, atk };
+    },
+    formula: ['面板 = 1307 × (1 + 攻击类盟约% + 弥漫莲香16%)',
+      '技能：40s、+180% 攻、每次攻击 +16%（最多 4 层）；萨尔贡按钮给 +300 攻速',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)，1 段/次攻击'] },
+  { id: 'zy', name: '真言', color: '#a0e7e5',
+    use: ['sargon', 'assault', 'precise', 'ling', 'she', 'arc'],
+    defaultOn: ['sargon'],
+    extras: [],
+    compute(s, d) {
+      const atk = 818 * (1 + 0.02 * Math.floor(s.sargon / 5) + d.atkBonus); // 作战能力：萨尔贡每 5 层 +2%
+      const ni = interval20(1.6, d.aspd, 3);
+      // 只有真言自己打神经损伤：每次技能伤害的 20% 计入累计，领袖阈值 2000
+      const perCast = 2.75 * atk;
+      const neuroPerCast = 0.20 * perCast;
+      const castsToBurst = 2000 / neuroPerCast;
+      const castSec = 3 * ni;                                  // 攻击回复：每 3 次攻击一次技能
+      const burstSec = Math.max(10, castsToBurst * castSec);   // 爆条 10s 冷却下限
+      // 爆条：6000 元素（真实）+ 爆发期间那次技能追加的 160% 元素（真实）
+      // 奥术：每段独立附加（普攻 1 段；技能 275% 1 段 + 160% 元素 1 段）
+      const burstDPS = (6000 + atk * 1.60) / burstSec + arcExtra(1, atk) / burstSec;
+      const normalDPS = (applyRes(atk * d.dmgMult) + arcExtra(1, atk)) / ni + burstDPS;
+      const extra = applyRes(atk * 2.75 * d.dmgMult) + arcExtra(1, atk);
+      return { normalDPS, skillDPS: normalDPS, extra, initSP: 0, costSP: 3, dur: 0, atk, regen: 1 / ni };
+    },
+    formula: ['面板 = 818 × (1 + 攻击类盟约% + 2%×floor(萨尔贡/5))',
+      '共鸣溃缩：每 3 次攻击 275% 法伤；神经损伤 = 技能伤害 20%，累计 2000 爆条 → 6000 元素 + 160% 元素（真实）',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；普攻 1 段、技能 275% 1 段 + 160% 元素 1 段'] },
+  { id: 'sn', name: '圣聆初雪', color: '#c8b6ff',
+    use: ['she', 'assault', 'precise', 'ling', 'arc'],
+    defaultOn: ['she'],
+    extras: [{ id: 'crowd', label: '范围内敌人多（伤害 +15%）' }],
+    compute(s, d) {
+      const atk = 931 * (1 + d.atkBonus + 0.70); // 技能 +70% 攻
+      const si = interval20(2.0, d.aspd + 30, 3); // 技能 +30 攻速
+      const hits = Math.floor(35 / si);
+      const mult = s._x.crowd ? 1.15 : 1.0;       // 阵术士：敌人越多最高 +15%
+      const hit = applyRes(atk * 2.10 * mult * d.dmgMult); // 210% 法伤（技能无视 10 法抗）
+      // 阵术士：通常不攻击 → 真空期 0 输出；奥术 1 段/次
+      return { normalDPS: 0, skillDPS: (hit + arcExtra(1, atk)) * hits / 35, initSP: 35, costSP: 53, dur: 35, atk };
+    },
+    formula: ['面板 = 931 × (1 + 攻击类盟约% + 技能70%)；技能伤害 × 谢拉格增伤',
+      '阵术士：非技能期不攻击（真空期 0）；技能 35s、+30 攻速、每次 210% 法伤、无视 10 法抗；敌人越多最高 +15%',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)，1 段/次攻击'] },
+  { id: 'kx', name: '空弦', color: '#8ecae6',
+    use: ['precise', 'assault', 'ling', 'she', 'yan', 'us', 'arc'],
+    defaultOn: ['precise'],
+    extras: [],
+    compute(s, d) {
+      const atk = 562 * (1 + d.atkBonus);
+      const ni = interval20(1.0, d.aspd + 8, 3); // 速射手：地面敌人 +8 攻速
+      // 奥术：普攻 1 段/次；技能 3 连击 = 3 段/次
+      const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni;
+      const sAtk = atk * 1.15;                   // 技能 +15% 攻
+      const hit = applyDef(sAtk * 3 * d.dmgMult); // 3 连击
+      const hits = Math.floor(20 / ni);
+      return { normalDPS, skillDPS: (hit + arcExtra(3, sAtk)) * hits / 20, initSP: 15, costSP: 34, dur: 20, atk, regen: 1 / ni };
+    },
+    formula: ['面板 = 562 × (1 + 攻击类盟约%)',
+      '速射手：地面敌人 +8 攻速；技能（攻击回复）20s、+15% 攻、3 连击、2 目标；兰登战术 每 2.5s +1 技力',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；普攻 1 段、技能 3 连击 3 段'] },
+  { id: 'tl', name: '塔露拉', color: '#ff6b35',
+    use: ['us', 'precise', 'ling', 'she', 'yan', 'arc'],
+    defaultOn: ['us'],
+    extras: [],
+    compute(s, d) {
+      const atk = 914 * (1 + d.atkBonus + 1.20); // 技能 +120% 攻
+      // 怒火：停手后每 0.5s +1 层（上限 6），法术/元素伤害 ×(1 + 15%×层数/6)
+      // S3 全程停手，3s 后稳定 6 层；按 36s 时间加权取平均倍率（≈1.143）
+      let rage = 0;
+      for (let t = 0; t < 36; t += 0.5) rage += 1 + 0.15 * Math.min(6, Math.floor(t / 0.5)) / 6;
+      rage /= 72;
+      // 每 2.67s 一波簇火；同一波 3 个火球同时命中：1 个按 175% 结算，另 2 个各按 175%×15%（每波独立，不叠层）
+      // 技能两段：前 18s 每 2.67s 一波；后 18s 过载，间隔缩短至 2s
+      const waves = Math.floor(18 / 2.67) + Math.floor(18 / 2.0);
+      const perWave = atk * (1.75 + 2 * 1.75 * 0.15) * rage;
+      // 奥术：每波 3 段（奥术附伤始终按法术结算）
+      const arcPerWave = arcExtra(3, atk);
+      // 平时簇火为法术伤害；目标处于灼燃损伤爆发期间时改为元素伤害（真伤）
+      const waveArts = applyRes(perWave * d.dmgMult) + arcPerWave;
+      const waveTrue = perWave * d.dmgMult + arcPerWave;
+      // 足迹：每 0.3s 造成 12% 攻击力法伤（吃怒火），每次都触发奥术（1 段）
+      const tick = applyRes(atk * 0.12 * d.dmgMult) * rage + arcExtra(1, atk);
+      // 灼燃累积 = 伤害的 11%（簇火 + 足迹）；阈值 2000（领袖）；爆条 10s 冷却
+      // 足迹覆盖：爆发后 5s 内持续铺设 + 每条再持续 3s = 8s
+      // 爆条覆盖率与总伤互相依赖（爆条期间改真伤 → 总伤更高 → 爆条更频繁），迭代收敛
+      let coverage = 0, total = 0, tickDPS = 0;
+      for (let i = 0; i < 6; i++) {
+        total = waves * (waveArts * (1 - coverage) + waveTrue * coverage);
+        tickDPS = (tick / 0.3) * coverage;
+        const accum = 0.11 * (total / 36 + tickDPS);
+        const burstInterval = Math.max(10, accum > 0 ? 2000 / accum : Infinity);
+        coverage = Math.min(1, 8 / burstInterval);
+      }
+      // 非技能期间不计伤害
+      return { normalDPS: 0, skillDPS: total / 36 + tickDPS, initSP: 38, costSP: 45, dur: 36, atk };
+    },
+    formula: ['面板 = 914 × (1 + 攻击类盟约% + 技能120%)',
+      '技能 36s：停手引导，每 2.67s 一波簇火；前 18s 普通、后 18s 过载（间隔缩短至 2s）',
+      '同一波 3 个火球同时命中：1 个按 175% 结算，另外 2 个各 15%（175%×15%），每波独立；目标处于灼燃损伤爆发期间时改为元素伤害（真伤）',
+      '怒火：停手后每 0.5s +1 层（上限 6 层），法术/元素伤害 ×(1 + 15%×层数/6)；S3 全程停手，36s 平均 ×1.143，簇火与足迹都吃',
+      '⚠️ 默认按「打巨型 Boss：同一波 3 个火球全中、足迹 1 格持续受击（爆发后 5s 铺设 + 3s 持续，共 8s）」计算，非技能期不计伤害',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；每波簇火 3 段、足迹每 tick 1 段'] },
+  { id: 'll', name: '荒芜拉普兰德', color: '#c77dff',
+    use: ['sira', 'precise', 'ling', 'she', 'yan', 'arc'],
+    defaultOn: ['sira'],
+    extras: [{ id: 'sira6', label: '6 叙拉古（异常真伤 800+10×层）' }],
+    compute(s, d) {
+      const atk = 392 * (1 + d.atkBonus);
+      const ni = interval20(1.3, d.aspd, 3);
+      // 奥术：普攻 1 段/次；技能每个浮游单元每 tick 1 段
+      const normalDPS = (applyRes(atk * 1.10 * d.dmgMult) + arcExtra(1, atk)) / ni; // 单元单次最高 110%
+      // 技能：+60% 攻、浮游单元 +2（共 4 个，含头狼默认叠加），每个每秒 100% 攻击力法伤
+      const sAtk = atk * 1.60;
+      const drones = 4;                            // 3（技能+2）+1（头狼默认叠加）
+      const skillDPS = applyRes(sAtk * 1.00 * drones * d.dmgMult) + arcExtra(drones, sAtk);
+      const s6 = (s._x.sira6 && s._on.sira) ? (800 + 10 * s.sira) : 0;
+      return { normalDPS: normalDPS + s6, skillDPS: skillDPS + s6, initSP: 43, costSP: 63, dur: 40, atk };
+    },
+    formula: ['面板 = 392 × (1 + 攻击类盟约%)',
+      '驭械术师：浮游单元最高 110% 攻击力；技能 40s、+60% 攻、单元 +2（头狼默认叠加，共 4 个），每个每秒 100% 攻击力法伤',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；普攻 1 段、技能每个单元每 tick 1 段（4 段/秒）'] },
+  { id: 'ws', name: '\u7ef4\u4ec0\u6234\u5c14', color: '#d0bfff',
+    use: ['precise', 'ling', 'she', 'yan', 'us', 'arc'],
+    defaultOn: ['precise'],
+    extras: [],
+    compute(s, d) {
+      const atk = 767 * 1.15 * (1 + d.atkBonus); // 好礼：主目标 115%
+      const ni = interval20(2.1, d.aspd, 3);
+      const si = interval20(1.4, d.aspd, 3);     // 技能间隔 -0.7 → 1.4s
+      // 一段攻击 = 主伤害 + (段数-1) 段余震（各为主伤害的一半）
+      // 每段都吃奥术；每段余震 15% 概率触发 150% 残影爆炸（爆炸也吃奥术）
+      const atkOf = (a, main, segs) => {
+        const dmg = applyDef(a * (main + (segs - 1) * main / 2) * d.dmgMult);
+        const arc = arcExtra(segs, a);
+        const boom = applyDef(a * (segs - 1) * 0.15 * 1.50 * d.dmgMult) + arcExtra((segs - 1) * 0.15, a);
+        return dmg + arc + boom;
+      };
+      const normalDPS = atkOf(atk, 1.0, 3) / ni;   // 普攻：3 段（100% + 2×50% 余震，模组）
+      const sAtk = atk * 1.25;
+      const half = Math.floor(12.5 / si);
+      const hits = Math.floor(25 / si);
+      const total = atkOf(sAtk, 1.0, 3) * half
+        + atkOf(sAtk, 0.70, 3) * 4 * Math.max(0, hits - half); // 过载：4 连击，每击 70% + 2×35% 余震
+      return { normalDPS, skillDPS: total / 25, initSP: 15, costSP: 29, dur: 25, atk };
+    },
+    formula: ['面板 = 767 × 1.15（好礼）× (1 + 攻击类盟约%)',
+      '\u6295\u63b7\u624b\uff1a3 \u6bb5\uff08100%+50%+50%\uff09\uff1b\u6280\u80fd 25s\uff1a+25% \u653b\u3001\u95f4\u9694\u7f29\u77ed\uff08\u6682\u6309 1.4s\uff09\uff0c\u8fc7\u8f7d\u540e\u6539\u4e3a 70% x 4 \u8fde\u53d1',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；普攻 3 段、过载每击 3 段、残影爆炸同样吃奥术'] },
+];
+
+/* ===== Boss 预设（来源：树海手册「卫戍协议·终极模拟」level-data/ws/boss-stages.json，PPT 满配等效） ===== */
+const BOSSES = [
+  { name: '第14轮 · 假想敌：胄', hp: 15760000, def: 1000, res: 25 },
+  { name: '第14轮 · 假想敌：铳', hp: 9000000, def: 1100, res: 60 },
+  { name: '第14轮 · 假想敌：管', hp: 16800000, def: 700, res: 50 },
+  { name: '第14轮 · 盐风主教昆图斯', hp: 17480000, def: 500, res: 40 },
+  { name: '第14轮 · 阿利斯泰尔，帝国余晖', hp: 14800000, def: 1030, res: 20 },
+  { name: '第14轮 · “萨米的意志”', hp: 16160000, def: 500, res: 35 },
+  { name: '第14轮 · 假想敌：械', hp: 13300000, def: 600, res: 30 },
+  { name: '第14轮 · 假想敌：茧', hp: 16600000, def: 800, res: 30 },
+  { name: '第14轮 · 假想敌：鳍', hp: 8400000, def: 600, res: 30 },
+  { name: '第14轮 · 矩兽', hp: 7800000, def: 1000, res: 10 },
+  { name: '第15轮 · 假想敌：胄', hp: 27360000, def: 1200, res: 30 },
+  { name: '第15轮 · 假想敌：铳', hp: 23920000, def: 1100, res: 60 },
+  { name: '第15轮 · 假想敌：管', hp: 28880000, def: 700, res: 50 },
+  { name: '第15轮 · 假想敌：械', hp: 20900000, def: 600, res: 30 },
+  { name: '第15轮 · 假想敌：茧', hp: 31540000, def: 800, res: 30 },
+  { name: '第15轮 · 假想敌：鳍', hp: 24700000, def: 600, res: 30 }
+];
+function initBossSelect() {
+  const sel = byId('boss');
+  sel.innerHTML = '<option value="-1">自定义</option>' +
+    BOSSES.map((b, i) => '<option value="' + i + '">' + b.name + '</option>').join('');
+  sel.value = '-1';
+  sel.onchange = () => {
+    const i = Number(sel.value);
+    if (!(i >= 0) || !BOSSES[i]) return;
+    byId('enemy-hp').value = BOSSES[i].hp;
+    byId('enemy-def').value = BOSSES[i].def;
+    byId('enemy-res').value = BOSSES[i].res;
+    refreshAll();
+  };
+}
+
+// 左侧盟约顺序：该干员默认盟约 → 精准/灵巧/奥术/迅捷 → 其余
+function orderedKeys(op) {
+  const out = [];
+  const push = k => { if (k && COV[k] && out.indexOf(k) < 0) out.push(k); };
+  (op.defaultOn || []).forEach(push);
+  ['precise', 'ling', 'arc', 'swift'].forEach(push);
+  KEYS.forEach(push);
+  return out;
+}
+
+/* ===== 渲染 ===== */
+const state = {};
+const tabs = byId('tabs'), panes = byId('panes');
+const tabBtn = {};      // 对比页点行跳转用
+let activeOpId = OPS[0].id;
+const opMap = {};
+OPS.forEach(o => opMap[o.id] = o);
+
+function render() {
+  OPS.forEach((op, i) => {
+    const st = state[op.id] = { x: {}, on: {}, swift: !!op.swift, L: {} };   // 天生迅捷干员（如烛煌）默认开启
+    KEYS.forEach(k => { st.on[k] = (op.defaultOn || []).includes(k); st.L[k] = 0; });
+    (op.extras || []).forEach(e => st.x[e.id] = false);
+
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (i ? '' : ' active');
+    btn.textContent = op.name;
+    btn.onclick = () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'p-' + op.id));
+      activeOpId = op.id;
+      update(op);
+    };
+    tabs.append(btn);
+    tabBtn[op.id] = btn;
+
+    const pane = document.createElement('div');
+    pane.className = 'pane' + (i ? '' : ' active');
+    pane.id = 'p-' + op.id;
+    // 所有页面都渲染全部盟约
+    pane.innerHTML = `
+    <div class="layout"><aside class="panel" style="max-height:860px;overflow-y:auto">
+      <h2>${op.name} · 全部盟约</h2>
+      <div class="sub" style="margin:-4px 0 10px">勾选即生效（转职后其他盟约同样作用于该干员）；层数是否全页同步见顶部「层数一致化」</div>
+      ${orderedKeys(op).map(k => `<div class="ctl">
+        <div class="row"><label class="toggle"><input type="checkbox" id="${op.id}-c-${k}" ${st.on[k] ? 'checked' : ''}> ${COV[k].label}</label><input type="number" id="${op.id}-n-${k}" value="${st.L[k]}" min="0" max="999"></div>
+        <input type="range" id="${op.id}-r-${k}" value="${st.L[k]}" min="0" max="999"></div>`).join('')}
+      ${(op.extras||[]).map(e => `<div class="ctl"><label class="toggle"><input type="checkbox" id="${op.id}-x-${e.id}"> ${e.label}</label></div>`).join('')}
+      ${op.swift ? '' : `<div class="ctl"><label class="toggle"><input type="checkbox" id="${op.id}-swift"> 迅捷干员（技能结束概率回技力）</label></div>`}
+    </aside><main class="panel"><h2>${op.name} 输出</h2>
+      <div class="metrics">
+        <div class="metric" style="border:1px solid ${op.color}"><small>周期 DPS（120s）</small><strong id="${op.id}-dps" style="color:${op.color}">0</strong></div>
+        <div class="metric" id="${op.id}-skbox"><small>技能期 DPS</small><strong id="${op.id}-sk">0</strong></div>
+        <div class="metric"><small>面板攻击</small><strong id="${op.id}-atk">0</strong></div>
+        <div class="metric" id="${op.id}-hitbox"><small>技能期总伤害</small><strong id="${op.id}-hit">0</strong></div>
+      </div>
+      <p id="${op.id}-delta" style="margin:0 0 8px;font-size:13px;font-weight:600;min-height:18px"></p>
+      <canvas id="${op.id}-ch"></canvas>
+      <p id="${op.id}-info" style="margin-top:10px;font-weight:bold;color:${op.color}"></p>
+      <div id="${op.id}-formula" style="margin-top:6px;color:#98a8bd;font-size:13px"></div></main></div>`;
+    panes.append(pane);
+
+    KEYS.forEach(k => {
+      const n = byId(`${op.id}-n-${k}`), r = byId(`${op.id}-r-${k}`), c = byId(`${op.id}-c-${k}`);
+      n.oninput = () => { setLayer(op, k, clamp(n.value, 0, 999)); r.value = n.value; syncInputs(); refreshAll(); };
+      r.oninput = () => { n.value = r.value; setLayer(op, k, clamp(r.value, 0, 999)); syncInputs(); refreshAll(); };
+      c.onchange = () => { const before = calc(op).cyc; st.on[k] = c.checked; update(op); showDelta(op, before); };
+    });
+    (op.extras || []).forEach(e => { byId(`${op.id}-x-${e.id}`).onchange = ev => { const before = calc(op).cyc; st.x[e.id] = ev.target.checked; update(op); showDelta(op, before); }; });
+    const sw = byId(`${op.id}-swift`);
+    if (sw) sw.onchange = ev => { const before = calc(op).cyc; st.swift = ev.target.checked; update(op); showDelta(op, before); };
+  });
+
+  // ===== 对比页 =====
+  const cbtn = document.createElement('button');
+  cbtn.className = 'tab-btn';
+  cbtn.textContent = '对比';
+  cbtn.onclick = () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === cbtn));
+    document.querySelectorAll('.pane').forEach(p => p.classList.toggle('active', p.id === 'p-cmp'));
+    renderCompare();
+  };
+  tabs.append(cbtn);
+
+  const cpane = document.createElement('div');
+  cpane.className = 'pane';
+  cpane.id = 'p-cmp';
+  cpane.innerHTML = `<div class="panel"><h2>对比 · 16 个干员周期 DPS</h2>
+    <p class="sub">按每个干员页当前的勾选 + 该页层数 / 敌人属性计算；顶部「层数一致化」可切换各页层数是否联动。点任意行可跳到该干员页。</p>
+    <div id="cmp-list"></div>
+    <p class="sub" id="cmp-note" style="margin-top:10px"></p></div>`;
+  panes.append(cpane);
+
+  refreshAll();
+}
+
+// 层数：每页各存一份；「层数一致化」开启时联动所有页
+function setLayer(op, k, v) {
+  state[op.id].L[k] = v;
+  const sync = byId('synclayers');
+  if (sync && sync.checked) OPS.forEach(o => { if (o.id !== op.id) state[o.id].L[k] = v; });
+}
+// 把每页的层数输入刷成该页自己的值（正在编辑的输入框除外）
+function syncInputs() {
+  OPS.forEach(op => KEYS.forEach(k => {
+    const v = state[op.id].L[k];
+    const n = byId(`${op.id}-n-${k}`), r = byId(`${op.id}-r-${k}`);
+    if (n && document.activeElement !== n) n.value = v;
+    if (r) r.value = v;
+  }));
+}
+// 对照模式：勾选后显示这次操作带来的 DPS 变化
+function showDelta(op, before) {
+  const el = byId(op.id + '-delta'); if (!el) return;
+  if (!byId('cmode').checked) { el.textContent = ''; return; }
+  const after = calc(op).cyc;
+  if (!(before > 0)) { el.textContent = ''; return; }
+  const pct = (after - before) / before * 100;
+  el.textContent = '对照：' + Math.round(before).toLocaleString() + ' → ' + Math.round(after).toLocaleString() +
+    '（' + (pct >= 0 ? '+' : '') + pct.toFixed(2) + '%）';
+  el.style.color = pct > 0.005 ? '#77dcc6' : pct < -0.005 ? '#ff8fab' : '#98a8bd';
+}
+function refreshAll() { OPS.forEach(update); renderCompare(); }
+
+/* ===== 计算 ===== */
+function derive(op) {
+  const st = state[op.id];
+  let atkBonus = 0, dmgMult = 1, aspd = 0;
+  KEYS.forEach(k => {                       // 转职：不看 use，全部 15 个盟约勾选即对当前干员生效
+    const c = COV[k]; if (!c) return;
+    const l = st.L[k];
+    if (!st.on[k]) return;                 // 本页未勾选 = 不生效
+    // 0 层也按公式的基础值生效（如维多利亚 125%、乌萨斯 +35%、灵巧 +10）
+    if (c.atk) atkBonus += c.atk(l);
+    if (c.mult) dmgMult *= c.mult(l);
+    if (c.aspd) aspd += c.aspd(l);
+  });
+  if (byId('j2').checked) atkBonus += 0.30; // 2绝技：攻击 +30%
+  if (byId('a50').checked) aspd += 50;      // 突袭 50 层的全队攻速（顶部全局按钮）
+  return { atkBonus, dmgMult, aspd };
+}
+
+/* ===== 单干员结算（update 与对比页共用，避免两套数字） ===== */
+function cycleOf(op, r) {
+  const st = state[op.id];
+  // 迅捷：技能结束概率回技力（迅捷干员 +12；≥40 层所有干员额外 +15）
+  const swL = st.L.swift, swP = Math.min(1, 0.20 + 0.0035 * swL); // 概率封顶 100%
+  const costMul = byId('j5').checked ? 0.7 : 1; // 5绝技：技力消耗 -30%
+  const costNow = r.costSP * costMul;
+  const Rmax = (st.swift ? 12 : 0) + (swL >= 40 ? 15 : 0); // 单次最多可回
+  // 概率加权：触发（p）时返还 R → 最快仍需 1 次攻击/1 秒；不触发（1-p）时按满消耗
+  // 期望返还 = p × (消耗 − 最少 1 次)，这样 p=1 时仍保留最小循环，不会把概率当成必然
+  const refund = st.on.swift ? swP * Math.min(Math.max(0, costNow - 1), Rmax) : 0;
+  const cyc = cycle120(r.normalDPS, r.skillDPS, r.initSP, costNow, r.dur, r.regen || 1, refund, r.extra);
+  return { cyc: cyc, swP: swP, costMul: costMul };
+}
+
+/* ===== 伊比利亚：通用持续法术伤害（任意干员勾选即生效） ===== */
+// 每次造成伤害附加 (11+0.06×层数)% 攻击力/秒，最多 10 层；层数按攻击间隔折算（攻速越快叠得越满）
+const BASE_IV = { m: 1.2, b: 1.0, x: 1.6, v: 3.0, c: 1.25, l: 1.6, e: 0.78, zh: 1.6, qb: 1.3, pp: 1.8, zy: 1.6, sn: 2.0, kx: 1.0, tl: 1.2, ll: 1.3, ws: 2.1 };
+function iberiaDot(op, d, r) {
+  const st = state[op.id];
+  if (!st.on.iberia) return 0;
+  const iv = interval20(BASE_IV[op.id] || 1, d.aspd, 3);
+  const stacks = Math.max(1, Math.min(10, Math.floor(10 / iv + 1e-9)));
+  const i6 = (st.x && st.x.i6) ? 2 : 1;        // 6 伊比利亚：提升至 2 倍（目前只有蓝毒有这个选项）
+  return applyRes(stacks * (0.11 + 0.0006 * st.L.iberia) * r.atk * i6);
+}
+
+function calc(op) {
+  const st = state[op.id];
+  const d = derive(op);
+  const s = Object.assign({}, st.L, { _x: st.x, _on: st.on });
+  setArcR(st);                                  // 奥术附伤倍率按本页勾选刷新
+  const r = op.compute(s, d);
+  const dot = iberiaDot(op, d, r);
+  if (dot > 0) {
+    if (r.normalDPS > 0) r.normalDPS += dot;    // 非技能期也攻击的干员：全程吃
+    r.skillDPS += dot;                          // 只技能期输出（解放者/阵术士/停手）只加技能期
+  }
+  return Object.assign({ r: r }, cycleOf(op, r));
+}
+
+function update(op) {
+  const st = state[op.id];
+  const c = calc(op), r = c.r, cyc = c.cyc;
+  byId(op.id + '-dps').textContent = Math.round(cyc).toLocaleString();
+  byId(op.id + '-sk').textContent = Math.round(r.skillDPS).toLocaleString();
+  byId(op.id + '-atk').textContent = Math.round(r.atk).toLocaleString();
+  byId(op.id + '-hit').textContent = r.dur > 0 ? Math.round(r.skillDPS * r.dur).toLocaleString() : '—';
+  // 脱手技能（无持续时间）不显示「技能期 DPS」和「技能期总伤害」
+  const hb = byId(op.id + '-hitbox');
+  if (hb && hb.style) hb.style.display = r.dur > 0 ? '' : 'none';
+  const skb = byId(op.id + '-skbox');
+  if (skb && skb.style) skb.style.display = r.dur > 0 ? '' : 'none';
+
+  // 999 层读数（把该干员的第一个主盟约拉到 999）
+  const pk = op.use[0], save = st.L[pk];
+  st.L[pk] = 999;
+  setArcR(st);
+  const d9 = derive(op), s9 = Object.assign({}, st.L, { _x: st.x, _on: st.on }), r9 = op.compute(s9, d9);
+  st.L[pk] = save;
+  const c9 = cycleOf(op, r9).cyc;
+  byId(op.id + '-info').textContent = '当前 ' + pk + ' 层：周期 DPS ≈ ' + Math.round(cyc).toLocaleString() +
+    '（技能期 ' + Math.round(r.skillDPS).toLocaleString() + '，技力消耗 ' + Math.round(r.costSP) + '）　|　999 层：' + Math.round(c9).toLocaleString();
+  byId(op.id + '-formula').innerHTML = (op.formula || []).map(f => '<p style="margin:3px 0">● ' + f + '</p>').join('') +
+    '<p style="margin:3px 0;color:#6f7f96">※ 面板只乘攻击类盟约（卡西米尔 / 伊比利亚 / 莱塔尼亚 / 乌萨斯 / 精准 / 炎 / 突袭）与干员自身加成；灵巧、叙拉古只加攻速，维多利亚、谢拉格是增伤，奥术是附加伤害，都不进面板。</p>';
+  drawChart(op);
+}
+
+/* ===== 曲线 ===== */
+function drawChart(op) {
+  const cv = byId(op.id + '-ch');
+  const box = cv.getBoundingClientRect();
+  if (box.width < 2) return;
+  const ctx = cv.getContext('2d'), dpr = window.devicePixelRatio || 1;
+  cv.width = box.width * dpr; cv.height = box.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const W = box.width, H = box.height, pad = { l: 60, r: 20, t: 14, b: 26 };
+  const pw = W - pad.l - pad.r, ph = H - pad.t - pad.b;
+  const st = state[op.id];
+  const pk = op.use[0], save = st.L[pk], pts = [];
+  for (let i = 0; i <= 999; i += 10) {
+    st.L[pk] = i;
+    const d = derive(op), s = Object.assign({}, st.L, { _x: st.x, _on: st.on });
+    setArcR(st);
+    const r = op.compute(s, d);
+    pts.push({ x: i, y: cycle120(r.normalDPS, r.skillDPS, r.initSP, r.costSP, r.dur, r.regen || 1) });
+  }
+  st.L[pk] = save;
+  let maxY = 0; pts.forEach(p => maxY = Math.max(maxY, p.y)); maxY = (maxY || 1) * 1.1;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#98a8bd'; ctx.font = '12px sans-serif'; ctx.strokeStyle = '#2b3748';
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+  for (let i = 0; i <= 4; i++) { const y = pad.t + ph * (1 - i / 4); ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke(); ctx.fillText(Math.round(maxY * i / 4).toLocaleString(), pad.l - 8, y); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (const v of [0, 200, 400, 600, 800, 999]) ctx.fillText(String(v), pad.l + pw * v / 999, H - pad.b + 7);
+  ctx.strokeStyle = op.color; ctx.lineWidth = 2.5; ctx.beginPath();
+  pts.forEach((p, i) => { const x = pad.l + pw * p.x / 999, y = pad.t + ph * (1 - p.y / maxY); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.stroke();
+}
+
+/* ===== 对比页：全部干员排序 ===== */
+function renderCompare() {
+  const list = byId('cmp-list'); if (!list) return;
+  const rows = OPS.map(op => {
+    const c = calc(op);
+    return { op: op, cyc: c.cyc, skill: c.r.skillDPS, atk: c.r.atk, dur: c.r.dur };
+  }).sort((a, b) => b.cyc - a.cyc);
+  const max = Math.max(1, rows.length ? rows[0].cyc : 0);
+  const head = '<div class="cmp-row cmp-head"><span class="cmp-rank">名次</span><span>干员</span><span></span>' +
+    '<span class="cmp-num">周期 DPS</span><span class="cmp-num">技能期 DPS</span><span class="cmp-num">面板攻击</span></div>';
+  const body = rows.map((x, i) => {
+    const pct = Math.max(1, x.cyc / max * 100);
+    return '<div class="cmp-row" onclick="openOp(\'' + x.op.id + '\')" title="点击跳到 ' + x.op.name + '">' +
+      '<span class="cmp-rank">' + (i + 1) + '</span>' +
+      '<span class="cmp-name" style="color:' + x.op.color + '">' + x.op.name + '</span>' +
+      '<span class="cmp-barwrap"><span class="cmp-bar" style="width:' + pct.toFixed(1) + '%;background:' + x.op.color + '"></span></span>' +
+      '<span class="cmp-num" style="color:' + x.op.color + '">' + Math.round(x.cyc).toLocaleString() + '</span>' +
+      '<span class="cmp-num">' + (x.dur > 0 ? Math.round(x.skill).toLocaleString() : '—') + '</span>' +
+      '<span class="cmp-num">' + Math.round(x.atk).toLocaleString() + '</span></div>';
+  }).join('');
+  list.innerHTML = head + body;
+  const note = byId('cmp-note');
+  if (note) note.textContent = '最高：' + rows[0].op.name + ' ' + Math.round(rows[0].cyc).toLocaleString() +
+    '　|　最低：' + rows[rows.length - 1].op.name + ' ' + Math.round(rows[rows.length - 1].cyc).toLocaleString();
+}
+
+function openOp(id) {
+  const btn = tabBtn[id];
+  if (btn && btn.onclick) btn.onclick();
+}
+
+/* ===== 全局事件 ===== */
+byId('enemy-def').oninput = () => { byId('boss').value = '-1'; refreshAll(); };
+byId('enemy-res').oninput = () => { byId('boss').value = '-1'; refreshAll(); };
+byId('enemy-hp').oninput = () => { byId('boss').value = '-1'; };
+// 顶部勾选：对当前页显示变化百分比（对照模式）
+['p3', 'a3', 'j2', 'j5', 'a50'].forEach(id => {
+  byId(id).onchange = () => {
+    const cb = byId(id), op = opMap[activeOpId];
+    cb.checked = !cb.checked;                    // 先临时还原，才能取到「变化前」的 DPS
+    const before = calc(op).cyc;
+    cb.checked = !cb.checked;
+    refreshAll();
+    showDelta(op, before);
+  };
+});
+// 层数一致化：开启时把当前页的层数复制到所有页
+byId('synclayers').onchange = () => {
+  if (byId('synclayers').checked) {
+    const src = state[activeOpId].L;
+    OPS.forEach(o => { KEYS.forEach(k => { state[o.id].L[k] = src[k]; }); });
+  }
+  syncInputs();
+  refreshAll();
+};
+// 对照模式关闭时清掉所有页面的对照读数
+byId('cmode').onchange = () => {
+  if (!byId('cmode').checked) OPS.forEach(o => { const el = byId(o.id + '-delta'); if (el) el.textContent = ''; });
+};
+
+initBossSelect();
+render();
+</script>
+</html>
