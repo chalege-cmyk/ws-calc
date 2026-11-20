@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>卫戍协议 DPS 计算器 v1.11</title>
+<title>卫戍协议 DPS 计算器 v1.21</title>
 <style>
 :root { color-scheme: dark; font: 14px/1.55 system-ui, sans-serif; background: #10151d; color: #e4eaf3; }
 * { box-sizing: border-box; }
@@ -44,8 +44,8 @@ canvas { width: 100%; height: 300px; display: block; background: #101722; border
 </style>
 
 <header>
-  <small>ARKNIGHTS / 卫戍协议 · v1.11</small>
-  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.11</span></h1>
+  <small>ARKNIGHTS / 卫戍协议 · v1.21</small>
+  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.21</span></h1>
   <div class="sub">16 名干员 · 全盟约 · 对比页 · 单文件离线可用 · <b style="color:#77dcc6">默认数据为 4 人终极难度</b></div>
 </header>
 
@@ -69,6 +69,7 @@ canvas { width: 100%; height: 300px; display: block; background: #101722; border
 <script>
 const byId = (id) => document.getElementById(id);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Number(v) || 0));
+const SV = (init, elite) => (window._ver ? elite : init);   // 技能倍率：初始=4级 / 精锐=7级
 
 /* ===== 公共结算 ===== */
 function applyDef(dmg) {
@@ -125,21 +126,25 @@ const COV = {
 const KEYS = Object.keys(COV);
 const GEN = ['assault', 'precise', 'yan', 'ling', 'vic', 'she']; // 通用可勾选
 
+const EQUIPS = [{"name":"维式重锤","tier":"Ⅰ","base":{"atk":0.15},"adv":{"atk":0.25},"desc":"【基础】攻击力+15%【进阶】攻击力+25%"},{"name":"源石溶剂","tier":"Ⅰ","base":{"atk":0.4},"adv":{"atk":0.6},"desc":"【基础】携带者每秒流失60点生命值，攻击力+40%【进阶】携带者每秒流失60点生命值，攻击力+60%"},{"name":"雪祀之衣","tier":"Ⅰ","base":{},"adv":{},"desc":"【基础】生命上限+15%，使携带者更不容易受到攻击且阻挡数-1【进阶】生命上限+25%，使携带者更不容易受到攻击且阻挡数-1"},{"name":"战栗维式重锤","tier":"Ⅱ","base":{"atk":0.2},"adv":{"atk":0.35},"desc":"【基础】攻击力+20%；若携带者是地面干员则攻击时有10%概率使目标战栗2秒【进阶】攻击力+35%；若携带者是地面干员则攻击时有10%概率使目标战栗2秒"},{"name":"萨尔贡浓茶","tier":"Ⅱ","base":{"regen":0.15},"adv":{"regen":0.25},"desc":"【基础】技力自然回复速度+0.15/秒【进阶】技力自然回复速度+0.25/秒"},{"name":"聚合急救箱","tier":"Ⅱ","base":{},"adv":{},"desc":"【基础】攻击范围内每个友方干员首次生命值低于50%时，立刻治疗其35%最大生命值【进阶】攻击范围内每个友方干员首次生命值低于50%时，立刻治疗其50%最大生命值"},{"name":"灵巧涡轮手套","tier":"Ⅱ","base":{"aspd":2},"adv":{"aspd":3},"desc":"【基础】部署后每秒攻击速度+2（最多叠加20次），受到伤害时失去该效果【进阶】部署后每秒攻击速度+3（最多叠加20次），受到伤害时失去该效果"},{"name":"叙拉古正装","tier":"Ⅲ","base":{"aspd":15},"adv":{"aspd":25},"desc":"【基础】攻击速度+15，携带者部署方向左右两侧的我方干员攻击速度+10【进阶】攻击速度+25，携带者部署方向左右两侧的我方干员攻击速度+15"},{"name":"精准狙击镜","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】攻击距离自身3格及以上的目标时，伤害提高30%【进阶】攻击距离自身3格及以上的目标时，伤害提高50%"},{"name":"炎国短刀","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】每开启一次技能，获得5%的攻击力加成（最多叠加10次）【进阶】每开启一次技能，获得8%的攻击力加成（最多叠加10次）"},{"name":"迅捷作战粮","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】部署时，获得3点技力；每有一个同盟约的其他干员，额外获得3点技力【进阶】部署时，获得6点技力；每有一个同盟约的其他干员，额外获得6点技力"},{"name":"阿戈尔重刃","tier":"Ⅲ","base":{"atk":0.4},"adv":{"atk":0.6},"desc":"【基础】攻击力+40%，攻击速度-10【进阶】攻击力+60%，攻击速度-10"},{"name":"奥术法阵","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】法术抗性+20，攻击使目标失去特殊能力5秒【进阶】法术抗性+30，攻击使目标失去特殊能力5秒"},{"name":"坚固维式重锤","tier":"Ⅲ","base":{"atk":0.25},"adv":{"atk":0.45},"desc":"【基础】攻击力+25%；首次受到致命伤害时生命值不低于1，持续8秒【进阶】攻击力+45%；首次受到致命伤害时生命值不低于1，持续8秒"},{"name":"加速维式重锤","tier":"Ⅲ","base":{"atk":0.25,"aspd":30},"adv":{"atk":0.45,"aspd":30},"desc":"【基础】攻击力+25%；攻击速度+30【进阶】攻击力+45%；攻击速度+30"},{"name":"突袭手雷","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】每次部署后的10秒内，攻击时使目标晕眩2秒【进阶】每次部署后的15秒内，攻击时使目标晕眩2秒"},{"name":"乌萨斯呼吸器","tier":"Ⅲ","base":{"atk":0.2},"adv":{"atk":0.3},"desc":"【基础】阻挡数+1，攻击力+20%，每次再部署时上述加成效果叠加（最多叠加2次）【进阶】阻挡数+1，攻击力+30%，每次再部署时上述加成效果叠加（最多叠加3次）"},{"name":"多功能补剂","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】携带者每次造成伤害时，自身所属已激活盟约临时层数+1（每场战斗最多叠加12层）【进阶】携带者每次造成伤害时，自身所属已激活盟约临时层数+2（每场战斗最多叠加24层）"},{"name":"伊比利亚骨刺刀","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】携带者每次造成伤害时，额外造成1次相当于自身攻击力25%的法术伤害【进阶】携带者每次造成伤害时，额外造成2次相当于自身攻击力25%的法术伤害"},{"name":"蜂鸣器","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】更容易受到攻击，生命上限+40%【进阶】更容易受到攻击，生命上限+60%"},{"name":"伪装服","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】首次受到伤害后获得隐匿，持续15秒【进阶】首次受到伤害后获得隐匿，持续25秒"},{"name":"卡西米尔竞技旗","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】部署后15秒内造成的伤害提升至135%，随后逐渐衰减【进阶】部署后15秒内造成的伤害提升至160%，随后逐渐衰减"},{"name":"灼燃维式重锤","tier":"Ⅳ","base":{"atk":0.3},"adv":{"atk":0.5},"desc":"【基础】攻击力+30%；造成法术伤害时附带相当于10%伤害的灼燃损伤【进阶】攻击力+50%；造成法术伤害时附带相当于10%伤害的灼燃损伤"},{"name":"莱塔尼亚小鼓","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】携带者攻击范围内每次有单位被击倒时回复2技力【进阶】携带者攻击范围内每次有单位被击倒时回复4技力"},{"name":"谢拉格不融冰","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】造成伤害时有12%概率对目标施加1.5秒的寒冷【进阶】造成伤害时有20%概率对目标施加1.5秒的寒冷"},{"name":"可靠怀表","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】携带者技能开启所需技力-20%，但技能期间攻击速度-25%【进阶】携带者技能开启所需技力-40%，但技能期间攻击速度-25%"},{"name":"驱逐者警棍","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础&进阶】携带者对受到晕眩、冻结、恐惧等异常效果影响的敌人造成的伤害提升30%，若与“驱逐者瓦斯”同时持有则组合为“驱逐者防暴装备”"},{"name":"动能单手弩","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础&进阶】造成伤害时有30%概率使该次攻击力提升至130%；若与“动能加速器”同时持有则组合为“动能轰击弩”"},{"name":"汲取者之喙","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础&进阶】每次造成伤害时回复相当于造成伤害5%的生命值；若与“汲取者之心”同时持有则组合为“汲取者之镰”"},{"name":"双模机械臂","tier":"Ⅴ","base":{"atk":0.3},"adv":{"atk":0.5},"desc":"【基础】攻击力+30%，自身造成物理和法术伤害时，伤害类型转化为弱点伤害【进阶】攻击力+50%，自身造成物理和法术伤害时，伤害类型转化为弱点伤害"},{"name":"电流维式重锤","tier":"Ⅴ","base":{"atk":0.3},"adv":{"atk":0.5},"desc":"【基础】攻击力+30%；造成伤害时有5%概率使目标获得1层麻痹，且对麻痹的敌人造成伤害时无视其30%防御和法术抗性【进阶】攻击力+50%；造成伤害时有5%概率使目标获得1层麻痹，且对麻痹的敌人造成伤害时无视其30%防御和法术抗性"},{"name":"佣兵名牌","tier":"Ⅴ","base":{"atk":0.06},"adv":{"atk":0.12},"desc":"【基础】每有一种激活的盟约，使携带者攻击力+6%、生命上限+6%（最多叠加8次）【进阶】每有一种激活的盟约，使携带者攻击力+12%、生命上限+12%（最多叠加8次）"},{"name":"瓶装烈性反应","tier":"Ⅴ","base":{},"adv":{},"desc":"【基础】携带者对处于元素爆发状态的敌人造成的伤害额外增加30%【进阶】携带者对处于元素爆发状态的敌人造成的伤害额外增加50%"},{"name":"驱逐者瓦斯","tier":"Ⅴ","base":{},"adv":{},"desc":"【基础&进阶】携带者攻击范围内的敌人受到的晕眩、冻结、恐惧等异常状态影响时间提高100%，若与“驱逐者警棍”同时持有则组合为“驱逐者防暴装备”"},{"name":"天马之枪","tier":"Ⅵ","base":{"atk":0.5},"adv":{"atk":0.5},"desc":"【基础&进阶】攻击力+50%，若与“天马之盔”同时持有则组合为“天马之耀”"},{"name":"动能加速器","tier":"Ⅵ","base":{"aspd":2},"adv":{"aspd":2},"desc":"【基础&进阶】每次攻击或治疗时攻击速度+2（最高60层）；若与“动能单手弩”同时持有则组合为“动能轰击弩”"},{"name":"汲取者之心","tier":"Ⅵ","base":{"atk":0.3,"aspd":30},"adv":{"atk":0.3,"aspd":30},"desc":"【基础&进阶】攻击力+30%，攻击速度+30，每秒流失1%最大生命值（不会降至0）；若与“汲取者之喙”同时持有则组合为“汲取者之镰”"},{"name":"终极维式重锤","tier":"Ⅵ","base":{},"adv":{},"desc":"【基础&进阶】携带者获得当前场上所有维式重锤特殊效果，且每有一种带有特殊效果的维式重锤自身攻击力额外+20%"},{"name":"动能轰击弩","tier":"Ⅵ","base":{"aspd":2},"adv":{"aspd":2},"desc":"【基础&进阶】造成伤害时有30%概率使攻击力提升至130%；每次攻击后攻击速度+2（最高60层），攻击速度叠加达到上限后每次攻击时有30%概率对攻击范围内随机敌人造成自身攻击力100%的范围物理伤害"},{"name":"汲取者之镰","tier":"Ⅵ","base":{"atk":0.3,"aspd":30},"adv":{"atk":0.3,"aspd":30},"desc":"【基础&进阶】攻击力+30%，攻击速度+30，每秒流失1%最大生命值（不会降至0），每次造成伤害时回复相当于造成伤害5%的生命值；携带者处于技能期间时上述效果翻倍且自身无法被治疗"},{"name":"驱逐者防暴装备","tier":"Ⅵ","base":{},"adv":{},"desc":"【基础&进阶】携带者攻击范围内的敌人受到的晕眩、冻结、恐惧等异常状态影响时间提高100%，且对受这类异常状态影响的敌人造成伤害提升30%；携带者处于技能期间时，每次施加这类异常状态时有50%概率将其传递给附近另一名敌人"},{"name":"天马之耀","tier":"Ⅵ","base":{"atk":0.5,"true":1},"adv":{"atk":0.5,"true":1},"desc":"【基础&进阶】生命上限+60%，每秒恢复8%最大生命值；攻击力+50%，造成伤害时额外造成攻击力30%真实伤害"},{"name":"变形同构体","tier":"Ⅵ","base":{},"adv":{},"desc":"【基础&进阶】携带者获得额外盟约（由另一件携带装备而定）具体对应关系可在模拟中查看本装备天赋栏"}];
+
+const VER = {"仇白":{"init":{"atk":744,"iv":1.3},"elite":{"atk":879,"iv":1.3}},"烛煌":{"init":{"atk":801,"iv":1.6},"elite":{"atk":965,"iv":1.6}},"佩佩":{"init":{"atk":1338,"iv":1.8},"elite":{"atk":1576,"iv":1.8}},"真言":{"init":{"atk":767,"iv":1.6},"elite":{"atk":936,"iv":1.6}},"雪猎":{"init":{"atk":982,"iv":1.6},"elite":{"atk":1221,"iv":1.6}},"圣聆初雪":{"init":{"atk":958,"iv":2},"elite":{"atk":1094,"iv":2}},"浊心斯卡蒂":{"init":{"atk":441,"iv":1.3},"elite":{"atk":522,"iv":1.3}},"贝洛内":{"init":{"atk":665,"iv":0.78},"elite":{"atk":799,"iv":0.78}},"荒芜拉普兰德":{"init":{"atk":442,"iv":1.3},"elite":{"atk":514,"iv":1.3}},"玛恩纳":{"init":{"atk":394,"iv":1.2},"elite":{"atk":452,"iv":1.2}},"维伊":{"init":{"atk":1466,"iv":3},"elite":{"atk":1747,"iv":3}},"塔露拉":{"init":{"atk":1006,"iv":1.2},"elite":{"atk":1103,"iv":1.2}},"蓝毒":{"init":{"atk":593,"iv":1},"elite":{"atk":732,"iv":1}},"艾雅法拉":{"init":{"atk":778,"iv":1.6},"elite":{"atk":898,"iv":1.6}},"空弦":{"init":{"atk":659,"iv":1},"elite":{"atk":764,"iv":1}},"逻各斯":{"init":{"atk":801,"iv":1.6},"elite":{"atk":951,"iv":1.6}},"维什戴尔":{"init":{"atk":690,"iv":2.1},"elite":{"atk":767,"iv":2.1}},"维多利亚·维娜":{"init":{"atk":678,"iv":1.25},"elite":{"atk":772,"iv":1.25}}};
+
 /* ===== 干员：use = 该干员吃到的盟约 ===== */
 const OPS = [
   { id: 'm', name: '玛恩纳', color: '#77dcc6', use: ['kaz', ...GEN, 'sira', 'arc'],
     defaultOn: ['kaz'],
-    extras: [{ id: 'kaz6', label: '6 卡西米尔' }],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const tri = true; // 默认精锐（三连）
       const kz = (s._on && s._on.kaz) ? s.kaz : 0;
-      const base = (tri ? 390 : 331) + Math.floor(kz / 5) * (tri ? 20 : 10);
+      const base = (VER['玛恩纳'] ? VER['玛恩纳'][s._ver ? 'elite' : 'init'].atk : (tri ? 390 : 331)) + Math.floor(kz / 5) * (tri ? 20 : 10);
       const atk = base * (1 + d.atkBonus + 2.0) * 1.1;
       const si = interval20(1.2, d.aspd, 3);
       const hits = Math.floor(26 / si);
-      const tr = atk * (tri ? 0.11 : 0.10) + (s._x.kaz6 ? atk * 0.65 : 0);
+      const tr = atk * SV(0.10, 0.11) + (s._x.kaz6 ? atk * 0.65 : 0);
       // 奥术：每次技能攻击 2 段（物理 + 真伤）
-      return { normalDPS: 0, skillDPS: ((applyDef(atk * (tri ? 1.5 : 1.25) * d.dmgMult)) + tr + arcExtra(2, atk)) * hits / 26,
+      return { normalDPS: 0, skillDPS: ((applyDef(atk * SV(1.25, 1.50) * d.dmgMult)) + tr + arcExtra(2, atk)) * hits / 26,
         initSP: tri ? 20 : 15, costSP: tri ? 45 : 50, dur: 26, atk };
     },
     formula: ['面板 = (390 + 20×floor(卡西米尔/5)) × (1 + 解放者200% + 攻击类盟约%) × 1.1',
@@ -147,17 +152,17 @@ const OPS = [
       '奥术：每段独立附加 攻击力×(20%+0.4%/层)；本干员每次技能攻击 2 段（物理 + 真伤）'] },
   { id: 'b', name: '蓝毒', color: '#b48cff', use: ['iberia', ...GEN, 'arc'],
     defaultOn: ['iberia'],
-    extras: [{ id: 'i6', label: '6 伊比利亚' }],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const ib = (s._on && s._on.iberia) ? s.iberia : 0;
       // 作战能力（本干员专属）：伊比利亚每层 +1% 攻击力
-      const atk = 576 * (1 + d.atkBonus + 0.01 * ib);
+      const atk = (VER['蓝毒'] ? VER['蓝毒'][s._ver ? 'elite' : 'init'].atk : 576) * (1 + d.atkBonus + 0.01 * ib);
       const dot = 75; // 神经毒素 75/s（默认常开）；伊比利亚的持续伤害由通用逻辑统一附加
       const ni = interval20(1.0, d.aspd, 3);
       // 奥术：直伤 1 段/次 + 毒 DoT 整条每秒 1 段（不随层数/6伊增加段数）
       const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni + dot + arcExtra(1, atk);
       // 二重射击（攻击回复，每 3 次攻击触发）：额外 155% 物理
-      const extra = applyDef(atk * 1.55 * d.dmgMult);
+      const extra = applyDef(atk * SV(1.40, 1.55) * d.dmgMult);
       return { normalDPS, skillDPS: normalDPS, extra, initSP: 0, costSP: 3, dur: 0, atk, regen: 1 / ni };
     },
     formula: ['面板 = 576 × (1 + 攻击类盟约% + 作战能力：伊比利亚每层 +1%)',
@@ -165,13 +170,13 @@ const OPS = [
       '奥术：每段独立附加 攻击力×(20%+0.4%/层)；直伤 1 段 + 毒 DoT 每秒 1 段（不随层数增加）'] },
   { id: 'x', name: '艾雅法拉', color: '#ffb079', use: ['ley', 'arc', ...GEN],
     defaultOn: ['ley'],
-    extras: [],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const arcL = (s._on && s._on.arc) ? s.arc : 0;
       const leyL = (s._on && s._on.ley) ? s.ley : 0;
       // 作战能力（本干员专属）：莱塔尼亚/奥术每层 +1% 攻击力、+0.02/s 技力回复
-      const atk = 713 * (1 + d.atkBonus + 0.14 + 0.01 * (leyL + arcL));
-      const sk = atk + 713 * 0.85;
+      const atk = (VER['艾雅法拉'] ? VER['艾雅法拉'][s._ver ? 'elite' : 'init'].atk : 713) * (1 + d.atkBonus + 0.14 + 0.01 * (leyL + arcL));
+      const sk = atk + (VER['艾雅法拉'] ? VER['艾雅法拉'][s._ver ? 'elite' : 'init'].atk : 713) * SV(0.70, 0.85);
       const si = interval20(0.5, d.aspd, 3), ni = interval20(1.6, d.aspd, 3);
       const hits = Math.floor(15 / si);
       // 奥术：每段独立附加（普攻 1 段、火山每次 1 段）
@@ -183,18 +188,18 @@ const OPS = [
       '奥术：每段独立附加 攻击力×(20%+0.4%/层)，普攻 1 段、火山 1 段；技力回复 1 + 0.02×(莱塔尼亚+奥术)/秒'] },
   { id: 'v', name: '维伊', color: '#ff7b9c', use: ['us', ...GEN, 'sira', 'arc'],
     defaultOn: ['us'],
-    extras: [],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atkBase = 1405 * (1 + d.atkBonus + 0.10);
+      const atkBase = (VER['维伊'] ? VER['维伊'][s._ver ? 'elite' : 'init'].atk : 1405) * (1 + d.atkBonus + 0.10);
       const usL = (s._on && s._on.us) ? s.us : 0;   // 作战能力：乌萨斯每层 +1 攻速
       const dot = 540; // 战争技艺 DoT 默认常开（90/s × 6 层）
       // 奥术：直伤 1 段/次；DoT 整条每秒 1 段（不随层数增加）
       const arcDot = arcExtra(1, atkBase);
       let st = 0, t = 0, dmg = 0, n = 0;
       while (t < 28 && n++ < 300) {
-        const a = atkBase * (1 + 0.11 * st);
-        dmg += applyRes(a * d.dmgMult) + arcExtra(1, a); st = Math.min(st + 1, 9);
-        t += interval20(2.5, d.aspd + 30 + 7 * st + usL, 3);
+        const a = atkBase * (1 + SV(0.09, 0.11) * st);
+        dmg += applyRes(a * d.dmgMult) + arcExtra(1, a); st = Math.min(st + 1, SV(8, 9));
+        t += interval20(2.5, d.aspd + 30 + SV(6, 7) * st + usL, 3);
       }
       const ni = interval20(3.0, d.aspd + 30 + usL, 3);
       return { normalDPS: (applyRes(atkBase * d.dmgMult) + arcExtra(1, atkBase)) / ni + dot + arcDot, skillDPS: dmg / 28 + dot + arcDot, initSP: 6, costSP: 34, dur: 28, atk: atkBase };
@@ -204,7 +209,7 @@ const OPS = [
       '奥术：每段独立附加 攻击力×(20%+0.4%/层)；直伤 1 段/次 + DoT 每秒 1 段（不随层数增加）'] },
   { id: 'c', name: '火陈', color: '#ff6b6b', use: ['yan', ...GEN, 'arc'],
     defaultOn: ['yan'],
-    extras: [],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const atk = 723 * (1 + d.atkBonus + 0.13);
       const si = interval20(1.25, d.aspd + 13 + 8 + 60, 4);
@@ -212,7 +217,7 @@ const OPS = [
       const weak = (x) => Math.max(applyDef(x), applyRes(x));
       const hits = Math.floor(20 / si);
       // 每次攻击：3 次 × 180%，实际仍按弱点伤害结算（物理/法术取高）；剑气忽略不计
-      const perAttack = weak(atk * 1.80 * 3 * d.dmgMult);
+      const perAttack = weak(atk * SV(1.65, 1.80) * 3 * d.dmgMult);
       // 奥术：每段独立附加（普攻 1 段；技能每次攻击 3 段）
       return { normalDPS: (weak(atk * d.dmgMult) + arcExtra(1, atk)) / ni,
         skillDPS: (perAttack + arcExtra(3, atk)) * hits / 20,
@@ -223,18 +228,18 @@ const OPS = [
       '奥术：每段独立附加 攻击力×(20%+0.4%/层)；普攻 1 段、技能每次攻击 3 段'] },
   { id: 'l', name: '逻各斯', color: '#71aaff', use: ['vis', 'arc', ...GEN],
     defaultOn: ['vis', 'arc'],
-    extras: [],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const arcL = (s._on && s._on.arc) ? s.arc : 0;
       const visL = (s._on && s._on.vis) ? s.vis : 0;
-      const atk = 791 * (1 + d.atkBonus);
+      const atk = (VER['逻各斯'] ? VER['逻各斯'][s._ver ? 'elite' : 'init'].atk : 791) * (1 + d.atkBonus);
       const trait = 2 * Math.floor((visL + arcL) / 3);   // 远见的攻速只有逻各斯吃（其他人只吃给钱）
       const si = interval20(1.6, d.aspd + trait, 3);
       const evo = 0.4 * 0.7 * 2;
       const hits = Math.floor(30 / si);
       // 奥术：每段独立附加（普攻 1 段、技能每次 1 段）
       return { normalDPS: (applyRes((atk + 165 + evo * atk) * d.dmgMult) + arcExtra(1, atk)) / si,
-        skillDPS: (applyRes(((atk * 3.2) + 165 + evo * atk * 3.2) * d.dmgMult) + arcExtra(1, atk)) * hits / 30,
+        skillDPS: (applyRes(((atk * SV(2.6, 3.2)) + 165 + evo * atk * SV(2.6, 3.2)) * d.dmgMult) + arcExtra(1, atk)) * hits / 30,
         initSP: 18, costSP: 45, dur: 30, atk, regen: 1 + 1 / si };
     },
     formula: ['面板 = 791 × (1 + 攻击类盟约%)；延异视阈 技能伤害 +220%',
@@ -242,9 +247,9 @@ const OPS = [
       '奥术：每段独立附加 攻击力×(20%+0.4%/层)，普攻 1 段、技能 1 段'] },
   { id: 'e', name: '贝洛内', color: '#ffd166', use: ['sira', 'assault', ...GEN, 'arc'],
     defaultOn: ['sira'],
-    extras: [{ id: 'sira6', label: '6 叙拉古（异常真伤 800+10×层）' }],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = 616 * (1 + 0.02 * Math.floor((s.sira + s.assault) / 3) + d.atkBonus);
+      const atk = (VER['贝洛内'] ? VER['贝洛内'][s._ver ? 'elite' : 'init'].atk : 616) * (1 + 0.02 * Math.floor((s.sira + s.assault) / 3) + d.atkBonus);
       const aspd = 10 + (25 + 0.8 * s.sira);
       const si = interval20(0.78, d.aspd + aspd + 60, 3);
       const ni = interval20(0.78, d.aspd + aspd, 3);
@@ -260,18 +265,18 @@ const OPS = [
     use: ['yan', 'vic', 'assault', 'precise', 'ling', 'she', 'arc'],
     defaultOn: ['yan', 'vic'],
     swift: true,                       // 天生迅捷干员：默认回技力，不显示勾选框
-    extras: [{ id: 'burst', label: '一直爆条（10s 一次灼燃爆发）' }],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const on = !!s._x.burst;
-      const atk = 779 * (1 + d.atkBonus + (on ? 0.10 : 0)); // 熔点引爆：10s 内攻击 +10%
+      const atk = (VER['烛煌'] ? VER['烛煌'][s._ver ? 'elite' : 'init'].atk : 779) * (1 + d.atkBonus + (on ? 0.10 : 0)); // 熔点引爆：10s 内攻击 +10%
       const ni = interval20(1.6, d.aspd, 3);
       const burstDPS = on ? (atk * 4.20 + 7000) / 10 : 0; // 每 10s 爆发：420%攻 + 7000 元素（真实伤害）
-      const skAtk = atk * 1.85;
+      const skAtk = atk * (1 + SV(0.70, 0.85));
       const ssi = interval20(0.3, d.aspd, 3); // 攻击间隔 -1.3（1.6 → 0.3s）
       // 奥术：每段独立附加（主攻 1 段；爆条时元素 70% 再 1 段）
       const arcSegs = on ? 2 : 1;
       // 70% 元素伤害 = 真实伤害（无视防御/法抗）；不爆条则不触发
-      const perShot = applyRes(skAtk * (on ? 1.10 : 1) * d.dmgMult) + (on ? skAtk * 0.70 : 0);
+      const perShot = applyRes(skAtk * (on ? 1.10 : 1) * d.dmgMult) + (on ? skAtk * SV(0.60, 0.70) : 0);
       return { normalDPS: (applyRes(atk * (on ? 1.10 : 1) * d.dmgMult) + arcExtra(arcSegs, atk)) / ni + burstDPS,
         skillDPS: (perShot + arcExtra(arcSegs, skAtk)) / ssi + burstDPS, initSP: 16, costSP: 34, dur: Math.ceil(ssi * 21), atk };
     },
@@ -282,9 +287,9 @@ const OPS = [
   { id: 'qb', name: '仇白', color: '#9be15d',
     use: ['yan', 'assault', 'precise', 'ling', 'she', 'arc'],
     defaultOn: ['yan'],
-    extras: [{ id: 'bound', label: '目标处于束缚/停顿（入隙 +40%）' }],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = 778 * (1 + d.atkBonus);
+      const atk = (VER['仇白'] ? VER['仇白'][s._ver ? 'elite' : 'init'].atk : 778) * (1 + d.atkBonus);
       const ni = interval20(1.3, d.aspd, 3);
       const bound = !!s._x.bound;
       const phys = applyDef(atk * d.dmgMult);                                   // 物理 100%
@@ -292,7 +297,7 @@ const OPS = [
       const normalDPS = (phys + arts) / ni;
       // 奥术：每段独立附加，一轮 6 段（4 次普攻×1 段 + 留羽 2 段）；模组 10% 是「预计算附加」，不单独触发
       const arcHits = 4 * 1 + 2;
-      const extra = applyRes(atk * 2.40 * d.dmgMult) + arcExtra(arcHits, atk);
+      const extra = applyRes(atk * SV(2.10, 2.40) * d.dmgMult) + arcExtra(arcHits, atk);
       return { normalDPS, skillDPS: normalDPS, extra, initSP: 0, costSP: 5, dur: 0, atk, regen: 1 / ni };
     },
     formula: ['面板 = 778 × (1 + 攻击类盟约%)',
@@ -301,9 +306,9 @@ const OPS = [
   { id: 'pp', name: '佩佩', color: '#ff8fab',
     use: ['yan', 'sargon', 'assault', 'precise', 'ling', 'she', 'arc'],
     defaultOn: ['sargon'],
-    extras: [{ id: 'splash', label: '溅射≥3 敌（当次攻击 115%）' }],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = 1307 * (1 + d.atkBonus + 0.16); // 弥漫莲香：近卫 +16%
+      const atk = (VER['佩佩'] ? VER['佩佩'][s._ver ? 'elite' : 'init'].atk : 1307) * (1 + d.atkBonus + 0.16); // 弥漫莲香：近卫 +16%
       const ni = interval20(1.8, d.aspd, 3);
       // 奥术：每段独立附加（普攻 1 段、技能每次攻击 1 段）
       const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni;
@@ -312,7 +317,7 @@ const OPS = [
       let t = 0, dmg = 0, n = 0;
       while (t < 40 && n++ < 200) {
         const stacks = Math.min(4, n);
-        const atkNow = atk * (1 + 1.80 + 0.16 * stacks);
+        const atkNow = atk * (1 + SV(1.50, 1.80) + SV(0.13, 0.16) * stacks);
         const a = atkNow * (s._x.splash ? 1.15 : 1);
         dmg += applyDef(a * d.dmgMult) + arcExtra(1, atkNow);
         t += si;
@@ -325,9 +330,9 @@ const OPS = [
   { id: 'zy', name: '真言', color: '#a0e7e5',
     use: ['sargon', 'assault', 'precise', 'ling', 'she', 'arc'],
     defaultOn: ['sargon'],
-    extras: [],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = 818 * (1 + 0.02 * Math.floor(s.sargon / 5) + d.atkBonus); // 作战能力：萨尔贡每 5 层 +2%
+      const atk = (VER['浊心斯卡蒂'] ? VER['浊心斯卡蒂'][s._ver ? 'elite' : 'init'].atk : 818) * (1 + 0.02 * Math.floor(s.sargon / 5) + d.atkBonus); // 作战能力：萨尔贡每 5 层 +2%
       const ni = interval20(1.6, d.aspd, 3);
       // 只有真言自己打神经损伤：每次技能伤害的 20% 计入累计，领袖阈值 2000
       const perCast = 2.75 * atk;
@@ -348,13 +353,13 @@ const OPS = [
   { id: 'sn', name: '圣聆初雪', color: '#c8b6ff',
     use: ['she', 'assault', 'precise', 'ling', 'arc'],
     defaultOn: ['she'],
-    extras: [{ id: 'crowd', label: '范围内敌人多（伤害 +15%）' }],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = 931 * (1 + d.atkBonus + 0.70); // 技能 +70% 攻
+      const atk = (VER['圣聆初雪'] ? VER['圣聆初雪'][s._ver ? 'elite' : 'init'].atk : 931) * (1 + d.atkBonus + SV(0.35, 0.70)); // 群山俯首 +35%/+70% 攻
       const si = interval20(2.0, d.aspd + 30, 3); // 技能 +30 攻速
       const hits = Math.floor(35 / si);
       const mult = s._x.crowd ? 1.15 : 1.0;       // 阵术士：敌人越多最高 +15%
-      const hit = applyRes(atk * 2.10 * mult * d.dmgMult); // 210% 法伤（技能无视 10 法抗）
+      const hit = applyRes(atk * SV(1.80, 2.10) * mult * d.dmgMult); // 210% 法伤（技能无视 10 法抗）
       // 阵术士：通常不攻击 → 真空期 0 输出；奥术 1 段/次
       return { normalDPS: 0, skillDPS: (hit + arcExtra(1, atk)) * hits / 35, initSP: 35, costSP: 53, dur: 35, atk };
     },
@@ -364,14 +369,14 @@ const OPS = [
   { id: 'kx', name: '空弦', color: '#8ecae6',
     use: ['precise', 'assault', 'ling', 'she', 'yan', 'us', 'arc'],
     defaultOn: ['precise'],
-    extras: [],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = 562 * (1 + d.atkBonus);
+      const atk = (VER['空弦'] ? VER['空弦'][s._ver ? 'elite' : 'init'].atk : 569) * (1 + d.atkBonus);
       const ni = interval20(1.0, d.aspd + 8, 3); // 速射手：地面敌人 +8 攻速
       // 奥术：普攻 1 段/次；技能 3 连击 = 3 段/次
       const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni;
-      const sAtk = atk * 1.15;                   // 技能 +15% 攻
-      const hit = applyDef(sAtk * 3 * d.dmgMult); // 3 连击
+      const sAtk = atk * (1 + SV(0.10, 0.15));   // 暴风：+10%（4级）/+15%（7级）
+      const hit = applyDef(sAtk * d.dmgMult) * 3; // 3 连击，每击独立吃护甲
       const hits = Math.floor(20 / ni);
       return { normalDPS, skillDPS: (hit + arcExtra(3, sAtk)) * hits / 20, initSP: 15, costSP: 34, dur: 20, atk, regen: 1 / ni };
     },
@@ -381,9 +386,9 @@ const OPS = [
   { id: 'tl', name: '塔露拉', color: '#ff6b35',
     use: ['us', 'precise', 'ling', 'she', 'yan', 'arc'],
     defaultOn: ['us'],
-    extras: [],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = 914 * (1 + d.atkBonus + 1.20); // 技能 +120% 攻
+      const atk = (VER['塔露拉'] ? VER['塔露拉'][s._ver ? 'elite' : 'init'].atk : 914) * (1 + d.atkBonus + 1.20); // 技能 +120% 攻
       // 怒火：停手后每 0.5s +1 层（上限 6），法术/元素伤害 ×(1 + 15%×层数/6)
       // S3 全程停手，3s 后稳定 6 层；按 36s 时间加权取平均倍率（≈1.143）
       let rage = 0;
@@ -392,7 +397,8 @@ const OPS = [
       // 每 2.67s 一波簇火；同一波 3 个火球同时命中：1 个按 175% 结算，另 2 个各按 175%×15%（每波独立，不叠层）
       // 技能两段：前 18s 每 2.67s 一波；后 18s 过载，间隔缩短至 2s
       const waves = Math.floor(18 / 2.67) + Math.floor(18 / 2.0);
-      const perWave = atk * (1.75 + 2 * 1.75 * 0.15) * rage;
+      const _pw = SV(1.30, 1.75);
+      const perWave = atk * (_pw + 2 * _pw * 0.15) * rage;
       // 奥术：每波 3 段（奥术附伤始终按法术结算）
       const arcPerWave = arcExtra(3, atk);
       // 平时簇火为法术伤害；目标处于灼燃损伤爆发期间时改为元素伤害（真伤）
@@ -423,14 +429,14 @@ const OPS = [
   { id: 'll', name: '荒芜拉普兰德', color: '#c77dff',
     use: ['sira', 'precise', 'ling', 'she', 'yan', 'arc'],
     defaultOn: ['sira'],
-    extras: [{ id: 'sira6', label: '6 叙拉古（异常真伤 800+10×层）' }],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = 392 * (1 + d.atkBonus);
+      const atk = (VER['荒芜拉普兰德'] ? VER['荒芜拉普兰德'][s._ver ? 'elite' : 'init'].atk : 392) * (1 + d.atkBonus);
       const ni = interval20(1.3, d.aspd, 3);
       // 奥术：普攻 1 段/次；技能每个浮游单元每 tick 1 段
       const normalDPS = (applyRes(atk * 1.10 * d.dmgMult) + arcExtra(1, atk)) / ni; // 单元单次最高 110%
       // 技能：+60% 攻、浮游单元 +2（共 4 个，含头狼默认叠加），每个每秒 100% 攻击力法伤
-      const sAtk = atk * 1.60;
+      const sAtk = atk * (1 + SV(0.60, 0.80));
       const drones = 4;                            // 3（技能+2）+1（头狼默认叠加）
       const skillDPS = applyRes(sAtk * 1.00 * drones * d.dmgMult) + arcExtra(drones, sAtk);
       const s6 = (s._x.sira6 && s._on.sira) ? (800 + 10 * s.sira) : 0;
@@ -442,30 +448,67 @@ const OPS = [
   { id: 'ws', name: '\u7ef4\u4ec0\u6234\u5c14', color: '#d0bfff',
     use: ['precise', 'ling', 'she', 'yan', 'us', 'arc'],
     defaultOn: ['precise'],
-    extras: [],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = 767 * 1.15 * (1 + d.atkBonus); // 好礼：主目标 115%
+      const atk = (VER['维什戴尔'] ? VER['维什戴尔'][s._ver ? 'elite' : 'init'].atk : 767) * 1.15 * (1 + d.atkBonus); // 好礼：主目标 115%
       const ni = interval20(2.1, d.aspd, 3);
-      const si = interval20(1.4, d.aspd, 3);     // 技能间隔 -0.7 → 1.4s
+      const si = interval20(SV(1.6, 1.4), d.aspd, 3);   // 4级 -0.5 → 1.6s / 7级 -0.7 → 1.4s
       // 一段攻击 = 主伤害 + (段数-1) 段余震（各为主伤害的一半）
       // 每段都吃奥术；每段余震 15% 概率触发 150% 残影爆炸（爆炸也吃奥术）
       const atkOf = (a, main, segs) => {
-        const dmg = applyDef(a * (main + (segs - 1) * main / 2) * d.dmgMult);
-        const arc = arcExtra(segs, a);
-        const boom = applyDef(a * (segs - 1) * 0.15 * 1.50 * d.dmgMult) + arcExtra((segs - 1) * 0.15, a);
-        return dmg + arc + boom;
+        // 每段独立吃护甲：主伤害 1 段 + 余震 (segs-1) 段（各 50%），不能先求和再减一次护甲
+        const mainDmg = applyDef(a * main * d.dmgMult);
+        const aft = applyDef(a * main / 2 * d.dmgMult) * (segs - 1);
+        // 残影：每段余震独立 15% 概率触发 150%（按期望，每段单独吃护甲）
+        const boom = applyDef(a * 1.50 * d.dmgMult) * 0.15 * (segs - 1);
+        return mainDmg + aft + boom + arcExtra(segs, a) + arcExtra((segs - 1) * 0.15, a);
       };
       const normalDPS = atkOf(atk, 1.0, 3) / ni;   // 普攻：3 段（100% + 2×50% 余震，模组）
-      const sAtk = atk * 1.25;
+      const sAtk = atk * (1 + SV(0.16, 0.25));
       const half = Math.floor(12.5 / si);
       const hits = Math.floor(25 / si);
       const total = atkOf(sAtk, 1.0, 3) * half
-        + atkOf(sAtk, 0.70, 3) * 4 * Math.max(0, hits - half); // 过载：4 连击，每击 70% + 2×35% 余震
+        + atkOf(sAtk, SV(0.65, 0.70), 3) * 4 * Math.max(0, hits - half); // 过载：4 连击，每击 70% + 2×35% 余震
       return { normalDPS, skillDPS: total / 25, initSP: 15, costSP: 29, dur: 25, atk };
     },
     formula: ['面板 = 767 × 1.15（好礼）× (1 + 攻击类盟约%)',
       '\u6295\u63b7\u624b\uff1a3 \u6bb5\uff08100%+50%+50%\uff09\uff1b\u6280\u80fd 25s\uff1a+25% \u653b\u3001\u95f4\u9694\u7f29\u77ed\uff08\u6682\u6309 1.4s\uff09\uff0c\u8fc7\u8f7d\u540e\u6539\u4e3a 70% x 4 \u8fde\u53d1',
       '奥术：每段独立附加 攻击力×(20%+0.4%/层)；普攻 3 段、过载每击 3 段、残影爆炸同样吃奥术'] },
+
+  { id: 'xh', name: '雪猎', color: '#9ad0ff', use: ['she', 'precise', ...GEN],
+    defaultOn: ['she'],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
+    compute(s, d) {
+      const atk = (VER['雪猎'] ? VER['雪猎'][s._ver ? 'elite' : 'init'].atk : 912) * (1 + d.atkBonus);            // Ⅱ阶初始 912（精锐 1101 可手动按 911/912 比例换算）
+      const ni = interval20(1.6, d.aspd, 3);
+      const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni;
+      // 风雪连弩：180%×2 连击 + 裂云兽 180%（初始 SP 7 / 消耗 14）
+      const cast = applyDef(atk * 1.80 * d.dmgMult) * 2 + applyDef(atk * 1.80 * d.dmgMult);
+      const extra = cast - applyDef(atk * d.dmgMult);   // 技能替换一次普攻
+      return { normalDPS, skillDPS: normalDPS, extra, initSP: 7, costSP: 14, dur: 0, atk, regen: 1 };
+    },
+    formula: ['面板 = 912 × (1 + 攻击类盟约%)（精锐 1101，可把层数当量自行折算）',
+      '平A：1 段；技能「风雪连弩」：180% × 2 连击（对非移动 210%）+ 裂云兽 180% 物理（开技能时触发），消耗 14 / 初始 7',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；平A 1 段、技能 2 段'] },
+  { id: 'vn', name: '维多利亚·维娜', color: '#ffd166', use: ['vic', ...GEN],
+    defaultOn: ['vic'],
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
+    compute(s, d) {
+      const allies = 3;                                 // 天赋：范围内每名友方 +5% 攻（默认 3 人）
+      let atk = 772 * (1 + d.atkBonus) * (1 + 0.05 * allies);
+      // 6 维多利亚的装备加成由 calc() 统一处理（基础 +40% / 进阶 +80%）
+      const ni = interval20(1.25, d.aspd, 3);
+      const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni;
+      const sAtk = atk * (1 + SV(1.45, 1.60));          // S3：+145%（4级）/+160%（7级）
+      const si = interval20(1.00, d.aspd, 3);           // 间隔 -0.25
+      const hits = Math.floor(25 / si);
+      const skillDPS = (sAtk * hits) / 25;              // 技能期间为真实伤害（不吃护甲/法抗）
+      return { normalDPS, skillDPS, initSP: 30, costSP: 60, dur: 25, atk };
+    },
+    formula: ['面板 = 772 × (1 + 攻击类盟约%) × (1 + 5%×范围内友方数，默认 3 人)',
+      'S3「俱以我之名」：25s、+160% 攻、间隔 -0.25、伤害变真实（直接结算，不吃护甲/法抗）',
+      '天赋「诸王的叹息」：范围内每名友方 +5% 攻（精锐 2）；6 维多利亚需勾选并携带装备',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)'] },
 ];
 
 /* ===== Boss 预设（来源：树海手册「卫戍协议·终极模拟」level-data/ws/boss-stages.json，PPT 满配等效） ===== */
@@ -542,6 +585,7 @@ function render() {
     pane.className = 'pane' + (i ? '' : ' active');
     pane.id = 'p-' + op.id;
     // 所有页面都渲染全部盟约
+    const eqOpts = '<option value="0">无装备</option>' + EQUIPS.map((e, i) => '<option value="' + (i + 1) + '">' + e.tier + ' ' + e.name + '</option>').join('');
     pane.innerHTML = `
     <div class="layout"><aside class="panel" style="max-height:860px;overflow-y:auto">
       <h2>${op.name} · 全部盟约</h2>
@@ -550,6 +594,10 @@ function render() {
         <div class="row"><label class="toggle"><input type="checkbox" id="${op.id}-c-${k}" ${st.on[k] ? 'checked' : ''}> ${COV[k].label}</label><input type="number" id="${op.id}-n-${k}" value="${st.L[k]}" min="0" max="999"></div>
         <input type="range" id="${op.id}-r-${k}" value="${st.L[k]}" min="0" max="999"></div>`).join('')}
       ${(op.extras||[]).map(e => `<div class="ctl"><label class="toggle"><input type="checkbox" id="${op.id}-x-${e.id}"> ${e.label}</label></div>`).join('')}
+      <div class="ctl"><label class="toggle"><input type="checkbox" id="${op.id}-ver"> 精锐版本（默认初始档）</label></div>
+      <div class="ctl"><div class="row"><label>装备1 <select id="${op.id}-eq" style="min-width:150px">${eqOpts}</select></label><label class="toggle"><input type="checkbox" id="${op.id}-eqa"> 进阶</label></div></div>
+      <div class="ctl"><div class="row"><label>装备2 <select id="${op.id}-eq2" style="min-width:150px">${eqOpts}</select></label><label class="toggle"><input type="checkbox" id="${op.id}-eqa2"> 进阶</label></div>
+        <div class="sub" id="${op.id}-eqd" style="font-size:12px"></div></div>
       ${op.swift ? '' : `<div class="ctl"><label class="toggle"><input type="checkbox" id="${op.id}-swift"> 迅捷干员（技能结束概率回技力）</label></div>`}
     </aside><main class="panel"><h2>${op.name} 输出</h2>
       <div class="metrics">
@@ -571,6 +619,14 @@ function render() {
       c.onchange = () => { const before = calc(op).cyc; st.on[k] = c.checked; update(op); showDelta(op, before); };
     });
     (op.extras || []).forEach(e => { byId(`${op.id}-x-${e.id}`).onchange = ev => { const before = calc(op).cyc; st.x[e.id] = ev.target.checked; update(op); showDelta(op, before); }; });
+    const verBox = byId(`${op.id}-ver`);
+    if (verBox) verBox.onchange = () => { const before = calc(op).cyc; st.ver = verBox.checked; update(op); showDelta(op, before); };
+    const eqSel = byId(`${op.id}-eq`), eqAdv = byId(`${op.id}-eqa`);
+    if (eqSel) eqSel.onchange = () => { const before = calc(op).cyc; st.eq = Number(eqSel.value); const e = EQUIPS[st.eq - 1]; const dd = byId(op.id + '-eqd'); if (dd) dd.textContent = e ? e.desc : ''; update(op); showDelta(op, before); };
+    if (eqAdv) eqAdv.onchange = () => { const before = calc(op).cyc; st.eqAdv = eqAdv.checked; update(op); showDelta(op, before); };
+    const eqSel2 = byId(`${op.id}-eq2`), eqAdv2 = byId(`${op.id}-eqa2`);
+    if (eqSel2) eqSel2.onchange = () => { const before = calc(op).cyc; st.eq2 = Number(eqSel2.value); update(op); showDelta(op, before); };
+    if (eqAdv2) eqAdv2.onchange = () => { const before = calc(op).cyc; st.eq2Adv = eqAdv2.checked; update(op); showDelta(op, before); };
     const sw = byId(`${op.id}-swift`);
     if (sw) sw.onchange = ev => { const before = calc(op).cyc; st.swift = ev.target.checked; update(op); showDelta(op, before); };
   });
@@ -641,6 +697,20 @@ function derive(op) {
   });
   if (byId('j2').checked) atkBonus += 0.30; // 2绝技：攻击 +30%
   if (byId('a50').checked) aspd += 50;      // 突袭 50 层的全队攻速（顶部全局按钮）
+  // 装备：按所选 + 基础/进阶档加攻击力%/攻速
+  [[st.eq, st.eqAdv], [st.eq2, st.eq2Adv]].forEach(([idx, adv]) => {
+    const eq = EQUIPS[idx - 1];
+    if (!eq) return;
+    const e = adv ? eq.adv : eq.base;
+    if (e.atk) atkBonus += e.atk;
+    if (e.aspd) aspd += e.aspd;
+    if (e.regen) aspd += 0;          // 技力在 calc 里处理
+  });
+  derive.eqRegen = [[st.eq, st.eqAdv], [st.eq2, st.eq2Adv]].reduce((sum, [idx, adv]) => {
+    const eq = EQUIPS[idx - 1]; if (!eq) return sum;
+    const e = adv ? eq.adv : eq.base;
+    return sum + (e.regen || 0);
+  }, 0);
   return { atkBonus, dmgMult, aspd };
 }
 
@@ -674,7 +744,8 @@ function iberiaDot(op, d, r) {
 function calc(op) {
   const st = state[op.id];
   const d = derive(op);
-  const s = Object.assign({}, st.L, { _x: st.x, _on: st.on });
+  const s = Object.assign({}, st.L, { _x: st.x, _on: st.on, _ver: st.ver ? 1 : 0 });
+  window._ver = s._ver ? 1 : 0;
   setArcR(st);                                  // 奥术附伤倍率按本页勾选刷新
   const r = op.compute(s, d);
   const dot = iberiaDot(op, d, r);
@@ -682,6 +753,25 @@ function calc(op) {
     if (r.normalDPS > 0) r.normalDPS += dot;    // 非技能期也攻击的干员：全程吃
     r.skillDPS += dot;                          // 只技能期输出（解放者/阵术士/停手）只加技能期
   }
+  // ===== 6 盟约（转职后任意干员都可勾选） =====
+  const _iv = interval20(BASE_IV[op.id] || 1.2, d.aspd, 3);
+  if (st.x.sira6 && st.on.sira) {              // 6 叙拉古：异常每秒真伤
+    const v = 800 + 10 * st.L.sira;
+    r.normalDPS += v; r.skillDPS += v;
+  }
+  if (st.x.kaz6 && st.on.kaz && r.atk) {       // 6 卡西米尔：攻击附带 65% 真伤
+    const add = 0.65 * r.atk / _iv;
+    r.normalDPS += add; r.skillDPS += add;
+  }
+  if (st.x.vic6 && st.on.vic) {                // 6 维多利亚：基础装备 +40%，进阶装备 +80%
+    let bonus = 0;
+    if (st.eq > 0) bonus += st.eqAdv ? 0.80 : 0.40;
+    if (st.eq2 > 0) bonus += st.eq2Adv ? 0.80 : 0.40;
+    const mul = 1 + bonus;
+    r.normalDPS *= mul; r.skillDPS *= mul;
+  }
+  // 装备技力回复
+  if (derive.eqRegen) { r.regen = (r.regen || 1) + derive.eqRegen; }
   return Object.assign({ r: r }, cycleOf(op, r));
 }
 
