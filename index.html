@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>卫戍协议 DPS 计算器 v1.21</title>
+<title>卫戍协议 DPS 计算器 v1.24</title>
 <style>
 :root { color-scheme: dark; font: 14px/1.55 system-ui, sans-serif; background: #10151d; color: #e4eaf3; }
 * { box-sizing: border-box; }
@@ -44,8 +44,8 @@ canvas { width: 100%; height: 300px; display: block; background: #101722; border
 </style>
 
 <header>
-  <small>ARKNIGHTS / 卫戍协议 · v1.21</small>
-  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.21</span></h1>
+  <small>ARKNIGHTS / 卫戍协议 · v1.24</small>
+  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.24</span></h1>
   <div class="sub">16 名干员 · 全盟约 · 对比页 · 单文件离线可用 · <b style="color:#77dcc6">默认数据为 4 人终极难度</b></div>
 </header>
 
@@ -251,12 +251,12 @@ const OPS = [
     compute(s, d) {
       const atk = (VER['贝洛内'] ? VER['贝洛内'][s._ver ? 'elite' : 'init'].atk : 616) * (1 + 0.02 * Math.floor((s.sira + s.assault) / 3) + d.atkBonus);
       const aspd = 10 + (25 + 0.8 * s.sira);
-      const si = interval20(0.78, d.aspd + aspd + 60, 3);
+      const si = interval20(0.78, d.aspd + aspd + SV(40, 60), 3);
       const ni = interval20(0.78, d.aspd + aspd, 3);
       const hits = Math.floor(18 / si);
       const s6 = (s._x.sira6 && s._on.sira) ? (800 + 10 * s.sira) : 0;
       // 奥术：每段独立附加（1 段/次攻击）
-      return { normalDPS: (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni + s6, skillDPS: (applyDef(atk * 1.7 * d.dmgMult) + arcExtra(1, atk)) * hits / 18 + s6, initSP: 14, costSP: 26, dur: 18, atk };
+      return { normalDPS: (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni + s6, skillDPS: (applyDef(atk * SV(1.55, 1.70) * d.dmgMult) + arcExtra(1, atk)) * hits / 18 + s6, initSP: 14, costSP: 26, dur: 18, atk };
     },
     formula: ['面板 = 616 × (1 + 攻击类盟约% + 2%×floor((叙拉古+突袭)/3))',
       '叙拉古攻速 25+0.8/层；斗士 +10；军师的手段 18s、攻速+60、170%',
@@ -332,19 +332,19 @@ const OPS = [
     defaultOn: ['sargon'],
     extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = (VER['浊心斯卡蒂'] ? VER['浊心斯卡蒂'][s._ver ? 'elite' : 'init'].atk : 818) * (1 + 0.02 * Math.floor(s.sargon / 5) + d.atkBonus); // 作战能力：萨尔贡每 5 层 +2%
+      const atk = (VER['真言'] ? VER['真言'][s._ver ? 'elite' : 'init'].atk : 818) * (1 + 0.02 * Math.floor(s.sargon / 5) + d.atkBonus); // 作战能力：萨尔贡每 5 层 +2%
       const ni = interval20(1.6, d.aspd, 3);
       // 只有真言自己打神经损伤：每次技能伤害的 20% 计入累计，领袖阈值 2000
-      const perCast = 2.75 * atk;
+      const perCast = SV(2.30, 2.75) * atk;
       const neuroPerCast = 0.20 * perCast;
       const castsToBurst = 2000 / neuroPerCast;
       const castSec = 3 * ni;                                  // 攻击回复：每 3 次攻击一次技能
       const burstSec = Math.max(10, castsToBurst * castSec);   // 爆条 10s 冷却下限
       // 爆条：6000 元素（真实）+ 爆发期间那次技能追加的 160% 元素（真实）
       // 奥术：每段独立附加（普攻 1 段；技能 275% 1 段 + 160% 元素 1 段）
-      const burstDPS = (6000 + atk * 1.60) / burstSec + arcExtra(1, atk) / burstSec;
+      const burstDPS = (6000 + atk * SV(1.50, 1.60)) / burstSec + arcExtra(1, atk) / burstSec;
       const normalDPS = (applyRes(atk * d.dmgMult) + arcExtra(1, atk)) / ni + burstDPS;
-      const extra = applyRes(atk * 2.75 * d.dmgMult) + arcExtra(1, atk);
+      const extra = applyRes(atk * SV(2.30, 2.75) * d.dmgMult) + arcExtra(1, atk);
       return { normalDPS, skillDPS: normalDPS, extra, initSP: 0, costSP: 3, dur: 0, atk, regen: 1 / ni };
     },
     formula: ['面板 = 818 × (1 + 攻击类盟约% + 2%×floor(萨尔贡/5))',
@@ -429,22 +429,30 @@ const OPS = [
   { id: 'll', name: '荒芜拉普兰德', color: '#c77dff',
     use: ['sira', 'precise', 'ling', 'she', 'yan', 'arc'],
     defaultOn: ['sira'],
-    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
+    extras: [{ id: 'lls3', label: '技能3 · 终幕·浩劫（默认技能2 · 逐猎狂飙）' }, { id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const atk = (VER['荒芜拉普兰德'] ? VER['荒芜拉普兰德'][s._ver ? 'elite' : 'init'].atk : 392) * (1 + d.atkBonus);
-      const ni = interval20(1.3, d.aspd, 3);
-      // 奥术：普攻 1 段/次；技能每个浮游单元每 tick 1 段
-      const normalDPS = (applyRes(atk * 1.10 * d.dmgMult) + arcExtra(1, atk)) / ni; // 单元单次最高 110%
-      // 技能：+60% 攻、浮游单元 +2（共 4 个，含头狼默认叠加），每个每秒 100% 攻击力法伤
-      const sAtk = atk * (1 + SV(0.60, 0.80));
-      const drones = 4;                            // 3（技能+2）+1（头狼默认叠加）
-      const skillDPS = applyRes(sAtk * 1.00 * drones * d.dmgMult) + arcExtra(drones, sAtk);
+      const ni = interval20(1.3, d.aspd, 3);                     // 驭械术师攻击间隔 1.3s
+      const cap = 1.21;                                          // 特性 110% × 头狼 +10% = 121%
+      const s3 = !!s._x.lls3;
+      // 平A：1 个浮游单元，每次攻击最高 110%（头狼后 121%）
+      const normalDPS = (applyRes(atk * 1.10 * d.dmgMult) + arcExtra(1, atk)) / ni;
+      // 技能：单元数 +2（S3，总3）/ +3（S2，总4），每个单元每次攻击吃满伤害上限
+      const drones = (s3 ? 3 : 4) + 1;                          // 头狼：数量 +1（默认计入）
+      const bonus = s3 ? SV(0.45, 0.60) : SV(0.60, 0.80);
+      const sAtk = atk * (1 + bonus);
+      let skillDPS = (applyRes(sAtk * cap * drones * d.dmgMult) + arcExtra(drones, sAtk)) / ni;
+      if (s3) skillDPS += applyRes(atk * 1.00 * d.dmgMult);      // S3：单元周围每秒 100% 法伤（不叠加）
       const s6 = (s._x.sira6 && s._on.sira) ? (800 + 10 * s.sira) : 0;
-      return { normalDPS: normalDPS + s6, skillDPS: skillDPS + s6, initSP: 43, costSP: 63, dur: 40, atk };
+      return { normalDPS: normalDPS + s6, skillDPS: skillDPS + s6,
+        initSP: s3 ? 38 : SV(6, 12), costSP: s3 ? SV(69, 63) : 28, dur: s3 ? 40 : SV(15, 18), atk };
     },
     formula: ['面板 = 392 × (1 + 攻击类盟约%)',
-      '驭械术师：浮游单元最高 110% 攻击力；技能 40s、+60% 攻、单元 +2（头狼默认叠加，共 4 个），每个每秒 100% 攻击力法伤',
-      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；普攻 1 段、技能每个单元每 tick 1 段（4 段/秒）'] },
+      '驭械术师：操作浮游单元造成法术伤害，**攻击同一敌人时伤害提升，最高 110% 攻击力**；每次攻击按 1.3s 间隔结算',
+      '天赋「头狼」：每 20s 依次获得 伤害上限+10%（110%→121%）/ 沉默 / 数量+1；此处**上限 +10% 与数量 +1 均默认计入**',
+      '技能2「逐猎狂飙」（默认）：单元 +3（总 4）、+60%（4级）/+80%（7级）攻、持续 15/18s',
+      '技能3「终幕·浩劫」（勾选）：单元 +2（总 3）、+45%/+60% 攻、持续 40s，且单元周围每秒 100% 攻击力法伤（不叠加）',
+      '奥术：每段独立附加 攻击力×(20%+0.4%/层)；普攻 1 段、技能每个单元 1 段'] },
   { id: 'ws', name: '\u7ef4\u4ec0\u6234\u5c14', color: '#d0bfff',
     use: ['precise', 'ling', 'she', 'yan', 'us', 'arc'],
     defaultOn: ['precise'],
@@ -483,7 +491,7 @@ const OPS = [
       const ni = interval20(1.6, d.aspd, 3);
       const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni;
       // 风雪连弩：180%×2 连击 + 裂云兽 180%（初始 SP 7 / 消耗 14）
-      const cast = applyDef(atk * 1.80 * d.dmgMult) * 2 + applyDef(atk * 1.80 * d.dmgMult);
+      const cast = applyDef(atk * SV(1.60, 1.80) * d.dmgMult) * 2 + applyDef(atk * 1.80 * d.dmgMult);
       const extra = cast - applyDef(atk * d.dmgMult);   // 技能替换一次普攻
       return { normalDPS, skillDPS: normalDPS, extra, initSP: 7, costSP: 14, dur: 0, atk, regen: 1 };
     },
