@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>卫戍协议 DPS 计算器 v1.28</title>
+<title>卫戍协议 DPS 计算器 v1.29</title>
 <style>
 :root { color-scheme: dark; font: 14px/1.55 system-ui, sans-serif; background: #10151d; color: #e4eaf3; }
 * { box-sizing: border-box; }
@@ -44,8 +44,8 @@ canvas { width: 100%; height: 300px; display: block; background: #101722; border
 </style>
 
 <header>
-  <small>ARKNIGHTS / 卫戍协议 · v1.28</small>
-  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.28</span></h1>
+  <small>ARKNIGHTS / 卫戍协议 · v1.29</small>
+  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.29</span></h1>
   <div class="sub">16 名干员 · 全盟约 · 对比页 · 单文件离线可用 · <b style="color:#77dcc6">默认数据为 4 人终极难度</b></div>
 </header>
 
@@ -121,6 +121,7 @@ const COV = {
   vic:    { label: '维多利亚', mult: l => 1.25 + 0.008 * l },
   she:    { label: '谢拉格', mult: l => 1.35 + 0.01 * l },
   swift:  { label: '迅捷' },
+  fang:   { label: '协防干员' },   // 效果在 derive 里按精锐判定（120%/140%）
   sargon: { label: '萨尔贡（勾选自动+300攻速）', aspd: () => 300, flat: true }, // 勾选即 +300 攻速，不看层数
 };
 const KEYS = Object.keys(COV);
@@ -129,7 +130,7 @@ const GEN = ['assault', 'precise', 'yan', 'ling', 'vic', 'she']; // 通用可勾
 const MELEE_OPS = ['玛恩纳','火陈','赤刃明霄陈','仇白','佩佩','贝洛内','维娜·维多利亚','塔露拉'];
 const EQUIPS = [{"name":"维式重锤","tier":"Ⅰ","base":{"atk":0.15},"adv":{"atk":0.25},"desc":"【基础】攻击力+15%【进阶】攻击力+25%"},{"name":"源石溶剂","tier":"Ⅰ","base":{"atk":0.4},"adv":{"atk":0.6},"desc":"【基础】携带者每秒流失60点生命值，攻击力+40%【进阶】携带者每秒流失60点生命值，攻击力+60%"},{"name":"雪祀之衣","tier":"Ⅰ","base":{},"adv":{},"desc":"【基础】生命上限+15%，使携带者更不容易受到攻击且阻挡数-1【进阶】生命上限+25%，使携带者更不容易受到攻击且阻挡数-1"},{"name":"战栗维式重锤","tier":"Ⅱ","base":{"atk":0.2},"adv":{"atk":0.35},"desc":"【基础】攻击力+20%；若携带者是地面干员则攻击时有10%概率使目标战栗2秒【进阶】攻击力+35%；若携带者是地面干员则攻击时有10%概率使目标战栗2秒"},{"name":"萨尔贡浓茶","tier":"Ⅱ","base":{"regen":0.15},"adv":{"regen":0.25},"desc":"【基础】技力自然回复速度+0.15/秒【进阶】技力自然回复速度+0.25/秒"},{"name":"聚合急救箱","tier":"Ⅱ","base":{},"adv":{},"desc":"【基础】攻击范围内每个友方干员首次生命值低于50%时，立刻治疗其35%最大生命值【进阶】攻击范围内每个友方干员首次生命值低于50%时，立刻治疗其50%最大生命值"},{"name":"灵巧涡轮手套","tier":"Ⅱ","base":{"aspd":2},"adv":{"aspd":3},"desc":"【基础】部署后每秒攻击速度+2（最多叠加20次），受到伤害时失去该效果【进阶】部署后每秒攻击速度+3（最多叠加20次），受到伤害时失去该效果"},{"name":"叙拉古正装","tier":"Ⅲ","base":{"aspd":15},"adv":{"aspd":25},"desc":"【基础】攻击速度+15，携带者部署方向左右两侧的我方干员攻击速度+10【进阶】攻击速度+25，携带者部署方向左右两侧的我方干员攻击速度+15"},{"name":"精准狙击镜","tier":"Ⅲ","base":{"far":{"dist":3,"mult":0.3}},"adv":{"far":{"dist":3,"mult":0.5}},"desc":"【基础】攻击距离自身3格及以上的目标时，伤害提高30%【进阶】攻击距离自身3格及以上的目标时，伤害提高50%"},{"name":"炎国短刀","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】每开启一次技能，获得5%的攻击力加成（最多叠加10次）【进阶】每开启一次技能，获得8%的攻击力加成（最多叠加10次）"},{"name":"迅捷作战粮","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】部署时，获得3点技力；每有一个同盟约的其他干员，额外获得3点技力【进阶】部署时，获得6点技力；每有一个同盟约的其他干员，额外获得6点技力"},{"name":"阿戈尔重刃","tier":"Ⅲ","base":{"atk":0.4},"adv":{"atk":0.6},"desc":"【基础】攻击力+40%，攻击速度-10【进阶】攻击力+60%，攻击速度-10"},{"name":"奥术法阵","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】法术抗性+20，攻击使目标失去特殊能力5秒【进阶】法术抗性+30，攻击使目标失去特殊能力5秒"},{"name":"坚固维式重锤","tier":"Ⅲ","base":{"atk":0.25},"adv":{"atk":0.45},"desc":"【基础】攻击力+25%；首次受到致命伤害时生命值不低于1，持续8秒【进阶】攻击力+45%；首次受到致命伤害时生命值不低于1，持续8秒"},{"name":"加速维式重锤","tier":"Ⅲ","base":{"atk":0.25,"aspd":30},"adv":{"atk":0.45,"aspd":30},"desc":"【基础】攻击力+25%；攻击速度+30【进阶】攻击力+45%；攻击速度+30"},{"name":"突袭手雷","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】每次部署后的10秒内，攻击时使目标晕眩2秒【进阶】每次部署后的15秒内，攻击时使目标晕眩2秒"},{"name":"乌萨斯呼吸器","tier":"Ⅲ","base":{"atk":0.2},"adv":{"atk":0.3},"desc":"【基础】阻挡数+1，攻击力+20%，每次再部署时上述加成效果叠加（最多叠加2次）【进阶】阻挡数+1，攻击力+30%，每次再部署时上述加成效果叠加（最多叠加3次）"},{"name":"多功能补剂","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】携带者每次造成伤害时，自身所属已激活盟约临时层数+1（每场战斗最多叠加12层）【进阶】携带者每次造成伤害时，自身所属已激活盟约临时层数+2（每场战斗最多叠加24层）"},{"name":"伊比利亚骨刺刀","tier":"Ⅲ","base":{},"adv":{},"desc":"【基础】携带者每次造成伤害时，额外造成1次相当于自身攻击力25%的法术伤害【进阶】携带者每次造成伤害时，额外造成2次相当于自身攻击力25%的法术伤害"},{"name":"蜂鸣器","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】更容易受到攻击，生命上限+40%【进阶】更容易受到攻击，生命上限+60%"},{"name":"伪装服","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】首次受到伤害后获得隐匿，持续15秒【进阶】首次受到伤害后获得隐匿，持续25秒"},{"name":"卡西米尔竞技旗","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】部署后15秒内造成的伤害提升至135%，随后逐渐衰减【进阶】部署后15秒内造成的伤害提升至160%，随后逐渐衰减"},{"name":"灼燃维式重锤","tier":"Ⅳ","base":{"atk":0.3},"adv":{"atk":0.5},"desc":"【基础】攻击力+30%；造成法术伤害时附带相当于10%伤害的灼燃损伤【进阶】攻击力+50%；造成法术伤害时附带相当于10%伤害的灼燃损伤"},{"name":"护盾无人机","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】治疗时有10%概率使目标获得1层护盾（最多1层）【进阶】治疗时有15%概率使目标获得1层护盾（最多1层）"},{"name":"莱塔尼亚小鼓","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】携带者攻击范围内每次有单位被击倒时回复2技力【进阶】携带者攻击范围内每次有单位被击倒时回复4技力"},{"name":"谢拉格不融冰","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】造成伤害时有12%概率对目标施加1.5秒的寒冷【进阶】造成伤害时有20%概率对目标施加1.5秒的寒冷"},{"name":"可靠怀表","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础】携带者技能开启所需技力-20%，但技能期间攻击速度-25%【进阶】携带者技能开启所需技力-40%，但技能期间攻击速度-25%"},{"name":"驱逐者警棍","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础&进阶】携带者对受到晕眩、冻结、恐惧等异常效果影响的敌人造成的伤害提升30%，若与“驱逐者瓦斯”同时持有则组合为“驱逐者防暴装备”"},{"name":"动能单手弩","tier":"Ⅳ","base":{"roll":{"p":0.3,"mult":1.3}},"adv":{"roll":{"p":0.3,"mult":1.3}},"desc":"【基础&进阶】造成伤害时有30%概率使该次攻击力提升至130%；若与“动能加速器”同时持有则组合为“动能轰击弩”"},{"name":"汲取者之喙","tier":"Ⅳ","base":{},"adv":{},"desc":"【基础&进阶】每次造成伤害时回复相当于造成伤害5%的生命值；若与“汲取者之心”同时持有则组合为“汲取者之镰”"},{"name":"双模机械臂","tier":"Ⅴ","base":{"atk":0.3},"adv":{"atk":0.5},"desc":"【基础】攻击力+30%，自身造成物理和法术伤害时，伤害类型转化为弱点伤害【进阶】攻击力+50%，自身造成物理和法术伤害时，伤害类型转化为弱点伤害"},{"name":"电流维式重锤","tier":"Ⅴ","base":{"atk":0.3},"adv":{"atk":0.5},"desc":"【基础】攻击力+30%；造成伤害时有5%概率使目标获得1层麻痹，且对麻痹的敌人造成伤害时无视其30%防御和法术抗性【进阶】攻击力+50%；造成伤害时有5%概率使目标获得1层麻痹，且对麻痹的敌人造成伤害时无视其30%防御和法术抗性"},{"name":"佣兵名牌","tier":"Ⅴ","base":{"atk":0.06},"adv":{"atk":0.12},"desc":"【基础】每有一种激活的盟约，使携带者攻击力+6%、生命上限+6%（最多叠加8次）【进阶】每有一种激活的盟约，使携带者攻击力+12%、生命上限+12%（最多叠加8次）"},{"name":"瓶装烈性反应","tier":"Ⅴ","base":{},"adv":{},"desc":"【基础】携带者对处于元素爆发状态的敌人造成的伤害额外增加30%【进阶】携带者对处于元素爆发状态的敌人造成的伤害额外增加50%"},{"name":"驱逐者瓦斯","tier":"Ⅴ","base":{},"adv":{},"desc":"【基础&进阶】携带者攻击范围内的敌人受到的晕眩、冻结、恐惧等异常状态影响时间提高100%，若与“驱逐者警棍”同时持有则组合为“驱逐者防暴装备”"},{"name":"天马之枪","tier":"Ⅵ","base":{"atk":0.5},"adv":{"atk":0.5},"desc":"【基础&进阶】攻击力+50%，若与“天马之盔”同时持有则组合为“天马之耀”"},{"name":"动能加速器","tier":"Ⅵ","base":{"stack":{"per":2,"max":60}},"adv":{"stack":{"per":2,"max":60}},"desc":"【基础&进阶】每次攻击或治疗时攻击速度+2（最高60层）；若与“动能单手弩”同时持有则组合为“动能轰击弩”"},{"name":"汲取者之心","tier":"Ⅵ","base":{"atk":0.3,"aspd":30},"adv":{"atk":0.3,"aspd":30},"desc":"【基础&进阶】攻击力+30%，攻击速度+30，每秒流失1%最大生命值（不会降至0）；若与“汲取者之喙”同时持有则组合为“汲取者之镰”"},{"name":"终极维式重锤","tier":"Ⅵ","base":{},"adv":{},"desc":"【基础&进阶】携带者获得当前场上所有维式重锤特殊效果，且每有一种带有特殊效果的维式重锤自身攻击力额外+20%"},{"name":"动能轰击弩","tier":"Ⅵ","base":{"stack":{"per":2,"max":60},"roll":{"p":0.3,"mult":1.3},"proc":{"p":0.3,"mult":1.0}},"adv":{"stack":{"per":2,"max":60},"roll":{"p":0.3,"mult":1.3},"proc":{"p":0.3,"mult":1.0}},"desc":"【基础&进阶】造成伤害时有30%概率使攻击力提升至130%；每次攻击后攻击速度+2（最高60层），攻击速度叠加达到上限后每次攻击时有30%概率对攻击范围内随机敌人造成自身攻击力100%的范围物理伤害"},{"name":"汲取者之镰","tier":"Ⅵ","base":{"atk":0.3,"aspd":30},"adv":{"atk":0.3,"aspd":30},"desc":"【基础&进阶】攻击力+30%，攻击速度+30，每秒流失1%最大生命值（不会降至0），每次造成伤害时回复相当于造成伤害5%的生命值；携带者处于技能期间时上述效果翻倍且自身无法被治疗"},{"name":"驱逐者防暴装备","tier":"Ⅵ","base":{},"adv":{},"desc":"【基础&进阶】携带者攻击范围内的敌人受到的晕眩、冻结、恐惧等异常状态影响时间提高100%，且对受这类异常状态影响的敌人造成伤害提升30%；携带者处于技能期间时，每次施加这类异常状态时有50%概率将其传递给附近另一名敌人"},{"name":"天马之耀","tier":"Ⅵ","base":{"atk":0.5},"adv":{"atk":0.5},"desc":"【基础&进阶】生命上限+60%，每秒恢复8%最大生命值；攻击力+50%，造成伤害时额外造成攻击力30%真实伤害"}];
 
-const VER = {"仇白":{"init":{"atk":744,"iv":1.3},"elite":{"atk":879,"iv":1.3}},"烛煌":{"init":{"atk":801,"iv":1.6},"elite":{"atk":965,"iv":1.6}},"佩佩":{"init":{"atk":1338,"iv":1.8},"elite":{"atk":1576,"iv":1.8}},"真言":{"init":{"atk":767,"iv":1.6},"elite":{"atk":936,"iv":1.6}},"雪猎":{"init":{"atk":982,"iv":1.6},"elite":{"atk":1221,"iv":1.6}},"圣聆初雪":{"init":{"atk":958,"iv":2},"elite":{"atk":1094,"iv":2}},"浊心斯卡蒂":{"init":{"atk":441,"iv":1.3},"elite":{"atk":522,"iv":1.3}},"贝洛内":{"init":{"atk":665,"iv":0.78},"elite":{"atk":799,"iv":0.78}},"荒芜拉普兰德":{"init":{"atk":442,"iv":1.3},"elite":{"atk":514,"iv":1.3}},"玛恩纳":{"init":{"atk":394,"iv":1.2},"elite":{"atk":452,"iv":1.2}},"维伊":{"init":{"atk":1466,"iv":3},"elite":{"atk":1747,"iv":3}},"塔露拉":{"init":{"atk":1006,"iv":1.2},"elite":{"atk":1103,"iv":1.2}},"蓝毒":{"init":{"atk":593,"iv":1},"elite":{"atk":732,"iv":1}},"艾雅法拉":{"init":{"atk":778,"iv":1.6},"elite":{"atk":898,"iv":1.6}},"空弦":{"init":{"atk":659,"iv":1},"elite":{"atk":764,"iv":1}},"逻各斯":{"init":{"atk":801,"iv":1.6},"elite":{"atk":951,"iv":1.6}},"维什戴尔":{"init":{"atk":690,"iv":2.1},"elite":{"atk":767,"iv":2.1}},"维娜·维多利亚":{"init":{"atk":678,"iv":1.25},"elite":{"atk":772,"iv":1.25}},"奥尔佳":{"init":{"atk":635,"iv":1.05},"elite":{"atk":719,"iv":1.05}},"黑键":{"init":{"atk":1412,"iv":3.0},"elite":{"atk":1606,"iv":3.0}},"鸿雪":{"init":{"atk":818,"iv":1.6},"elite":{"atk":966,"iv":1.6}}};
+const VER = {"仇白":{"init":{"atk":744,"iv":1.3},"elite":{"atk":879,"iv":1.3}},"烛煌":{"init":{"atk":801,"iv":1.6},"elite":{"atk":965,"iv":1.6}},"佩佩":{"init":{"atk":1338,"iv":1.8},"elite":{"atk":1576,"iv":1.8}},"真言":{"init":{"atk":767,"iv":1.6},"elite":{"atk":936,"iv":1.6}},"雪猎":{"init":{"atk":982,"iv":1.6},"elite":{"atk":1221,"iv":1.6}},"圣聆初雪":{"init":{"atk":958,"iv":2},"elite":{"atk":1094,"iv":2}},"浊心斯卡蒂":{"init":{"atk":441,"iv":1.3},"elite":{"atk":522,"iv":1.3}},"贝洛内":{"init":{"atk":665,"iv":0.78},"elite":{"atk":799,"iv":0.78}},"荒芜拉普兰德":{"init":{"atk":442,"iv":1.3},"elite":{"atk":514,"iv":1.3}},"玛恩纳":{"init":{"atk":394,"iv":1.2},"elite":{"atk":452,"iv":1.2}},"维伊":{"init":{"atk":1466,"iv":3},"elite":{"atk":1747,"iv":3}},"塔露拉":{"init":{"atk":1006,"iv":1.2},"elite":{"atk":1103,"iv":1.2}},"蓝毒":{"init":{"atk":593,"iv":1},"elite":{"atk":732,"iv":1}},"艾雅法拉":{"init":{"atk":778,"iv":1.6},"elite":{"atk":898,"iv":1.6}},"空弦":{"init":{"atk":659,"iv":1},"elite":{"atk":764,"iv":1}},"逻各斯":{"init":{"atk":801,"iv":1.6},"elite":{"atk":951,"iv":1.6}},"维什戴尔":{"init":{"atk":690,"iv":2.1},"elite":{"atk":767,"iv":2.1}},"维娜·维多利亚":{"init":{"atk":678,"iv":1.25},"elite":{"atk":772,"iv":1.25}},"奥尔佳":{"init":{"atk":635,"iv":1.05},"elite":{"atk":719,"iv":1.05}},"黑键":{"init":{"atk":1412,"iv":3.0},"elite":{"atk":1606,"iv":3.0}},"鸿雪":{"init":{"atk":818,"iv":1.6},"elite":{"atk":966,"iv":1.6}},"暴躁铁皮":{"init":{"atk":760,"iv":1.6},"elite":{"atk":903,"iv":1.6}}};
 
 /* ===== 干员：use = 该干员吃到的盟约 ===== */
 const OPS = [
@@ -568,6 +569,26 @@ const OPS = [
       'S3「锐笔速写」：攻击间隔 −0.6（1.6→1.0s），每次攻击 155%（4级）/170%（7级），持续 26/27 秒',
       '天赋：每次开启技能使萨尔贡/精准 +8 层（每回合至多 32 层）'] },
 
+  { id: 'bp', name: '暴躁铁皮', color: '#9aa5b1', use: ['fang', ...GEN, 'arc'],
+    defaultOn: ['fang'],
+    slots: true,
+    extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
+    compute(s, d) {
+      const trait = s._ver ? 1.20 : 0.60;                 // 天赋：攻击力+60%/+120%
+      const atk = (VER['暴躁铁皮'] ? VER['暴躁铁皮'][s._ver ? 'elite' : 'init'].atk : 760) * (1 + trait + d.atkBonus);
+      const ni = interval20(1.6, d.aspd, 3);
+      const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni;
+      const sAtk = atk * (1 + SV(1.60, 1.90));
+      const si = interval20(1.0, d.aspd, 3);              // 攻击间隔 −0.6
+      const hits = Math.floor(20 / si);
+      return { normalDPS, skillDPS: (applyDef(sAtk * d.dmgMult) + arcExtra(1, sAtk)) * hits / 20,
+        initSP: SV(5, 10), costSP: SV(20, 17), dur: 20, atk };
+    },
+    formula: ['面板 = 760（初始）/ 903（精锐）× (1 + 天赋 60%/120% + 攻击类盟约%)',
+      'S1「大丑的愤怒」：攻击间隔 −0.6（1.6→1.0s）、攻击力 +160%（4级）/+190%（7级），持续 20 秒',
+      '协防干员：普通 120% 伤害，精锐 140%（上方勾选框控制）',
+      '装备栏：普通 4 个、精锐 6 个'] },
+
 ];
 
 /* ===== Boss 预设（来源：树海手册「卫戍协议·终极模拟」level-data/ws/boss-stages.json，PPT 满配等效） ===== */
@@ -654,9 +675,8 @@ function render() {
         <input type="range" id="${op.id}-r-${k}" value="${st.L[k]}" min="0" max="999"></div>`).join('')}
       ${(op.extras||[]).map(e => `<div class="ctl"><label class="toggle"><input type="checkbox" id="${op.id}-x-${e.id}"> ${e.label}</label></div>`).join('')}
       <div class="ctl"><label class="toggle"><input type="checkbox" id="${op.id}-ver"> 精锐版本（默认初始档）</label></div>
-      <div class="ctl"><div class="row"><label>装备1 <select id="${op.id}-eq" style="min-width:150px">${eqOpts}</select></label><label class="toggle"><input type="checkbox" id="${op.id}-eqa"> 进阶</label></div></div>
-      <div class="ctl"><div class="row"><label>装备2 <select id="${op.id}-eq2" style="min-width:150px">${eqOpts}</select></label><label class="toggle"><input type="checkbox" id="${op.id}-eqa2"> 进阶</label></div>
-        <div class="sub" id="${op.id}-eqd" style="font-size:12px"></div></div>
+      ${Array.from({ length: op.slots ? 6 : 2 }, (_, i) => `<div class="ctl"><div class="row"><label>装备${i + 1} <select id="${op.id}-eq${i ? i + 1 : ''}" style="min-width:150px">${eqOpts}</select></label><label class="toggle"><input type="checkbox" id="${op.id}-eqa${i ? i + 1 : ''}"> 进阶</label></div></div>`).join('')}
+      <div class="sub" id="${op.id}-eqd" style="font-size:12px"></div>
       ${op.swift ? '' : `<div class="ctl"><label class="toggle"><input type="checkbox" id="${op.id}-swift"> 迅捷干员（技能结束概率回技力）</label></div>`}
     </aside><main class="panel"><h2>${op.name} 输出</h2>
       <div class="metrics">
@@ -680,12 +700,17 @@ function render() {
     (op.extras || []).forEach(e => { byId(`${op.id}-x-${e.id}`).onchange = ev => { const before = calc(op).cyc; st.x[e.id] = ev.target.checked; update(op); showDelta(op, before); }; });
     const verBox = byId(`${op.id}-ver`);
     if (verBox) verBox.onchange = () => { const before = calc(op).cyc; st.ver = verBox.checked; update(op); showDelta(op, before); };
-    const eqSel = byId(`${op.id}-eq`), eqAdv = byId(`${op.id}-eqa`);
-    if (eqSel) eqSel.onchange = () => { const before = calc(op).cyc; st.eq = Number(eqSel.value); const e = EQUIPS[st.eq - 1]; const dd = byId(op.id + '-eqd'); if (dd) dd.textContent = e ? e.desc : ''; update(op); showDelta(op, before); };
-    if (eqAdv) eqAdv.onchange = () => { const before = calc(op).cyc; st.eqAdv = eqAdv.checked; update(op); showDelta(op, before); };
-    const eqSel2 = byId(`${op.id}-eq2`), eqAdv2 = byId(`${op.id}-eqa2`);
-    if (eqSel2) eqSel2.onchange = () => { const before = calc(op).cyc; st.eq2 = Number(eqSel2.value); update(op); showDelta(op, before); };
-    if (eqAdv2) eqAdv2.onchange = () => { const before = calc(op).cyc; st.eq2Adv = eqAdv2.checked; update(op); showDelta(op, before); };
+    ['eq', 'eq2', 'eq3', 'eq4', 'eq5', 'eq6'].forEach((k, i) => {
+      const sel = byId(`${op.id}-eq${i ? i + 1 : ''}`), adv = byId(`${op.id}-eqa${i ? i + 1 : ''}`);
+      if (sel) sel.onchange = () => {
+        const before = calc(op).cyc;
+        st[k] = Number(sel.value);
+        const e = EQUIPS[st[k] - 1]; const dd = byId(op.id + '-eqd');
+        if (dd && st[k] > 0) dd.textContent = e ? e.desc : '';
+        update(op); showDelta(op, before);
+      };
+      if (adv) adv.onchange = () => { const before = calc(op).cyc; st[k + 'Adv'] = adv.checked; update(op); showDelta(op, before); };
+    });
     const sw = byId(`${op.id}-swift`);
     if (sw) sw.onchange = ev => { const before = calc(op).cyc; st.swift = ev.target.checked; update(op); showDelta(op, before); };
   });
@@ -755,10 +780,13 @@ function derive(op) {
     if (c.mult) dmgMult *= c.mult(l);
     if (c.aspd) aspd += c.aspd(l);
   });
+  if (st.on.fang) dmgMult *= (st.ver ? 1.40 : 1.20);   // 协防干员：精锐 140%，普通 120%
   if (byId('j2').checked) atkBonus += 0.30; // 2绝技：攻击 +30%
   if (byId('a50').checked) aspd += 50;      // 突袭 50 层的全队攻速（顶部全局按钮）
   // 装备：按所选 + 基础/进阶档加攻击力%/攻速
-  [[st.eq, st.eqAdv], [st.eq2, st.eq2Adv]].forEach(([idx, adv]) => {
+  const EQK = ['eq', 'eq2', 'eq3', 'eq4', 'eq5', 'eq6'];
+  const eqN = op.slots ? (st.ver ? 6 : 4) : 2;
+  EQK.slice(0, eqN).map(k => [st[k], st[k + 'Adv']]).forEach(([idx, adv]) => {
     const eq = EQUIPS[idx - 1];
     if (!eq) return;
     const e = adv ? eq.adv : eq.base;
@@ -773,7 +801,7 @@ function derive(op) {
     }
     if (e.regen) aspd += 0;          // 技力在 calc 里处理
   });
-  derive.eqRegen = [[st.eq, st.eqAdv], [st.eq2, st.eq2Adv]].reduce((sum, [idx, adv]) => {
+  derive.eqRegen = EQK.slice(0, eqN).map(k => [st[k], st[k + 'Adv']]).reduce((sum, [idx, adv]) => {
     const eq = EQUIPS[idx - 1]; if (!eq) return sum;
     const e = adv ? eq.adv : eq.base;
     return sum + (e.regen || 0);
@@ -831,9 +859,10 @@ function calc(op) {
     r.normalDPS += add; r.skillDPS += add;
   }
   if (st.x.vic6 && st.on.vic) {                // 6 维多利亚：基础装备 +40%，进阶装备 +80%
+    const keys = ['eq', 'eq2', 'eq3', 'eq4', 'eq5', 'eq6'];
+    const cnt = op.slots ? (st.ver ? 6 : 4) : 2;
     let bonus = 0;
-    if (st.eq > 0) bonus += st.eqAdv ? 0.80 : 0.40;
-    if (st.eq2 > 0) bonus += st.eq2Adv ? 0.80 : 0.40;
+    keys.slice(0, cnt).forEach(k => { if (st[k] > 0) bonus += st[k + 'Adv'] ? 0.80 : 0.40; });
     const mul = 1 + bonus;
     r.normalDPS *= mul; r.skillDPS *= mul;
   }
