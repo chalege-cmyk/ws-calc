@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>卫戍协议 DPS 计算器 v1.31</title>
+<title>卫戍协议 DPS 计算器 v1.32</title>
 <style>
 :root { color-scheme: dark; font: 14px/1.55 system-ui, sans-serif; background: #10151d; color: #e4eaf3; }
 * { box-sizing: border-box; }
@@ -44,8 +44,8 @@ canvas { width: 100%; height: 300px; display: block; background: #101722; border
 </style>
 
 <header>
-  <small>ARKNIGHTS / 卫戍协议 · v1.31</small>
-  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.31</span></h1>
+  <small>ARKNIGHTS / 卫戍协议 · v1.32</small>
+  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.32</span></h1>
   <div class="sub">16 名干员 · 全盟约 · 对比页 · 单文件离线可用 · <b style="color:#77dcc6">默认数据为 4 人终极难度</b></div>
 </header>
 
@@ -782,7 +782,12 @@ function derive(op) {
     if (c.mult) dmgMult *= c.mult(l);
     if (c.aspd) aspd += c.aspd(l);
   });
-  if (st.on.fang) dmgMult *= (st.ver ? 1.40 : 1.20);   // 协防干员：精锐 140%，普通 120%
+  if (st.on.fang) dmgMult *= (st.ver ? 1.40 : 1.20);
+  if (st.x.vic6 && st.on.vic) {                 // 6 维多利亚：基础装备 +40%、进阶 +80%（与精准/乌萨斯同乘区）
+    const vk = ['eq', 'eq2', 'eq3', 'eq4', 'eq5', 'eq6'];
+    const vn = op.slots ? (st.ver ? 6 : 4) : 2;
+    vk.slice(0, vn).forEach(k => { if (st[k] > 0) atkBonus += st[k + 'Adv'] ? 0.80 : 0.40; });
+  }   // 协防干员：精锐 140%，普通 120%
   if (byId('j2').checked) atkBonus += 0.30; // 2绝技：攻击 +30%
   if (byId('a50').checked) aspd += 50;      // 突袭 50 层的全队攻速（顶部全局按钮）
   // 装备：按所选 + 基础/进阶档加攻击力%/攻速
@@ -861,14 +866,7 @@ function calc(op) {
     const add = 0.65 * r.atk / _iv;
     r.normalDPS += add; r.skillDPS += add;
   }
-  if (st.x.vic6 && st.on.vic) {                // 6 维多利亚：基础装备 +40%，进阶装备 +80%
-    const keys = ['eq', 'eq2', 'eq3', 'eq4', 'eq5', 'eq6'];
-    const cnt = op.slots ? (st.ver ? 6 : 4) : 2;
-    let bonus = 0;
-    keys.slice(0, cnt).forEach(k => { if (st[k] > 0) bonus += st[k + 'Adv'] ? 0.80 : 0.40; });
-    const mul = 1 + bonus;
-    r.normalDPS *= mul; r.skillDPS *= mul;
-  }
+  // 6 维多利亚的装备加成已并入 derive() 的 atkBonus（与精准/乌萨斯同乘区）
   // 装备：每次造成伤害额外 N 次攻击力 M% 法术伤害（骨刺刀）
   if (derive.eqBone && r.atk) {
     const seg = (SEGS[op.id] || [1, 1])[r.dur > 0 ? 1 : 0];
