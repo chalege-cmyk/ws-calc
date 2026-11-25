@@ -96,6 +96,7 @@ function interval20(baseSec, aspd, minF) {
   const s = Math.min(600, 100 + aspd) / 100;
   return Math.max(minF || 3, Math.round(baseSec * 20 / s)) / 20;
 }
+const MIN_CYCLE = 2.2;      // 手动技能释放间隔下限：再快的迅捷也只能 2.2 秒一次
 function cycle120(nDPS, sDPS, initSP, costSP, dur, regen, refund, extra, overlap) {
   const r = regen > 0 ? regen : 1;
   if (!(costSP > 0)) return sDPS;
@@ -162,6 +163,7 @@ const OPS = [
       '奥术：每段独立附加 攻击力×(20%+0.4%/层)；本干员每次技能攻击 2 段（物理 + 真伤）'] },
   { id: 'b', name: '蓝毒', color: '#b48cff', use: ['iberia', ...GEN, 'arc'],
     defaultOn: ['iberia'],
+    auto: true,   // 蓝毒/仇白/真言：攻击回复、自动触发，不受 2.2s 限制
     extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const ib = (s._on && s._on.iberia) ? s.iberia : 0;
@@ -297,6 +299,7 @@ const OPS = [
   { id: 'qb', name: '仇白', color: '#9be15d',
     use: ['yan', 'assault', 'precise', 'ling', 'she', 'arc'],
     defaultOn: ['yan'],
+    auto: true,   // 蓝毒/仇白/真言：攻击回复、自动触发，不受 2.2s 限制
     extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const atk = (VER['仇白'] ? VER['仇白'][s._ver ? 'elite' : 'init'].atk : 778) * (1 + d.atkBonus);
@@ -340,6 +343,7 @@ const OPS = [
   { id: 'zy', name: '真言', color: '#a0e7e5',
     use: ['sargon', 'assault', 'precise', 'ling', 'she', 'arc'],
     defaultOn: ['sargon'],
+    auto: true,   // 蓝毒/仇白/真言：攻击回复、自动触发，不受 2.2s 限制
     extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const atk = (VER['真言'] ? VER['真言'][s._ver ? 'elite' : 'init'].atk : 818) * (1 + 0.02 * Math.floor(s.sargon / 5) + d.atkBonus); // 作战能力：萨尔贡每 5 层 +2%
@@ -530,6 +534,7 @@ const OPS = [
   { id: 'oj', name: '奥尔佳', color: '#d4a017', use: ['us', 'ling', ...GEN, 'arc'],
     defaultOn: ['us'],
     overlap: true,
+    auto: true,
     extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
       const atk = (VER['奥尔佳'] ? VER['奥尔佳'][s._ver ? 'elite' : 'init'].atk : 563) * (1 + d.atkBonus);
@@ -838,7 +843,12 @@ function cycleOf(op, r) {
   // 期望返还 = p × (消耗 − 最少 1 次)，这样 p=1 时仍保留最小循环，不会把概率当成必然
   const quick = st.swift || st.on.swift;   // 本人是迅捷干员，或本页勾了迅捷盟约
   const refund = quick ? swP * Math.min(Math.max(0, costNow - 1), Rmax) : 0;
-  const cyc = cycle120(r.normalDPS, r.skillDPS, r.initSP, costNow, r.dur, r.regen || 1, refund, r.extra, op.overlap);
+  let cyc = cycle120(r.normalDPS, r.skillDPS, r.initSP, costNow, r.dur, r.regen || 1, refund, r.extra, op.overlap);
+  // 手动技能每 2.2 秒最多放一次；自动/攻击回复技能（op.auto）不受此限
+  if (!op.auto && (costNow > 0) && cyc < MIN_CYCLE) {
+    const need = Math.max(MIN_CYCLE - r.dur, 0);
+    cyc = (r.normalDPS * need + r.skillDPS * Math.min(r.dur, MIN_CYCLE)) / MIN_CYCLE;
+  }
   return { cyc: cyc, swP: swP, costMul: costMul };
 }
 
