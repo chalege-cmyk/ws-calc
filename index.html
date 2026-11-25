@@ -96,11 +96,16 @@ function interval20(baseSec, aspd, minF) {
   const s = Math.min(600, 100 + aspd) / 100;
   return Math.max(minF || 3, Math.round(baseSec * 20 / s)) / 20;
 }
-function cycle120(nDPS, sDPS, initSP, costSP, dur, regen, refund, extra) {
+function cycle120(nDPS, sDPS, initSP, costSP, dur, regen, refund, extra, overlap) {
   const r = regen > 0 ? regen : 1;
   if (!(costSP > 0)) return sDPS;
   // 稳态平均：一轮 = 充能时间 + 技能时间，避免 120s 窗口取整造成台阶
   const need = Math.max(0, costSP - (refund || 0)) / r;
+  if (overlap) {                       // 技能期与充能期重叠（强化一击类）
+    const c = Math.max(need, dur);
+    if (!(c > 0)) return sDPS;
+    return (nDPS * Math.max(0, c - dur) + sDPS * dur + (extra || 0)) / c;
+  }
   const cyc = need + dur;
   if (!(cyc > 0)) return sDPS;
   return (nDPS * need + sDPS * dur + (extra || 0)) / cyc;
@@ -459,7 +464,7 @@ const OPS = [
       '技能3「终幕·浩劫」（勾选）：单元 +2（总 3）、+45%/+60% 攻、持续 40s，且单元周围每秒 100% 攻击力法伤（不叠加）',
       '奥术：每段独立附加 攻击力×(20%+0.4%/层)；普攻 1 段、技能每个单元 1 段'] },
   { id: 'ws', name: '\u7ef4\u4ec0\u6234\u5c14', color: '#d0bfff',
-    use: ['precise', 'ling', 'she', 'yan', 'us', 'arc'],
+    use: ['fang', 'precise', 'ling', 'she', 'yan', 'us', 'arc'],
     defaultOn: ['precise'],
     extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
@@ -524,35 +529,38 @@ const OPS = [
       '奥术：每段独立附加 攻击力×(20%+0.4%/层)'] },
   { id: 'oj', name: '奥尔佳', color: '#d4a017', use: ['us', 'ling', ...GEN, 'arc'],
     defaultOn: ['us'],
+    overlap: true,
     extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = (VER['奥尔佳'] ? VER['奥尔佳'][s._ver ? 'elite' : 'init'].atk : 635) * (1 + d.atkBonus);
+      const atk = (VER['奥尔佳'] ? VER['奥尔佳'][s._ver ? 'elite' : 'init'].atk : 563) * (1 + d.atkBonus);
       const ni = interval20(1.05, d.aspd, 3);
       const normalDPS = (applyDef(atk * d.dmgMult) + arcExtra(1, atk)) / ni;
-      const sAtk = atk * (1 + SV(0.40, 0.50));
-      const hits = Math.floor(15 / ni);
-      return { normalDPS, skillDPS: (applyDef(sAtk * d.dmgMult) + arcExtra(1, sAtk)) * hits / 15,
-        initSP: SV(10, 15), costSP: SV(32, 30), dur: 15, atk };
+      // S1「交叉施压」（攻击回复，4 次攻击触发）：强化一击 = 2 段 125%（4级）/145%（7级）
+      const per = atk * SV(1.25, 1.45) * 2;
+      const skillDPS = (applyDef(per * d.dmgMult) + arcExtra(2, atk)) / ni;
+      return { normalDPS, skillDPS, initSP: 0, costSP: 4, dur: ni, atk };
     },
-    formula: ['面板 = 635（初始）/ 719（精锐）× (1 + 攻击类盟约%)',
-      'S2「只为我的答案」：攻击力 +40%（4级）/+50%（7级），持续 15 秒',
+    formula: ['面板 = 563（初始）/ 660（精锐）× (1 + 攻击类盟约%)',
+      'S1「交叉施压」（攻击回复）：每 4 次攻击强化一次，造成 2 段 125%（4级）/145%（7级）物理伤害',
+      '（攻击回复：4 次攻击触发一次强化；迅捷满层时充能 1 次攻击即可再触发 → 连续强化击）',
       '天赋（获得时）给两件乌萨斯呼吸器，不参与 DPS 计算'] },
 
   { id: 'hj', name: '黑键', color: '#7b68ee', use: ['let', 'precise', ...GEN, 'arc'],
     defaultOn: ['let'],
     extras: [{ id: 'kaz6', label: '6 卡西米尔（攻击附带 65% 真伤）' }, { id: 'sira6', label: '6 叙拉古（异常每秒真伤 800+10×层）' }, { id: 'vic6', label: '6 维多利亚（每件装备 +40% 攻）' }],
     compute(s, d) {
-      const atk = (VER['黑键'] ? VER['黑键'][s._ver ? 'elite' : 'init'].atk : 1412) * (1 + d.atkBonus);
+      const atk = (VER['黑键'] ? VER['黑键'][s._ver ? 'elite' : 'init'].atk : 1247) * (1 + d.atkBonus);
       const ni = interval20(3.0, d.aspd, 3);
       const normalDPS = (applyRes(atk * d.dmgMult) + arcExtra(1, atk)) / ni;
-      const sAtk = atk * (1 + SV(0.43, 0.50));
-      const si = interval20(3.0, d.aspd + SV(50, 60), 3);
-      const hits = Math.floor(30 / si);
-      return { normalDPS, skillDPS: (applyRes(sAtk * d.dmgMult) + arcExtra(1, sAtk)) * hits / 30,
-        initSP: SV(6, 8), costSP: SV(24, 22), dur: 30, atk };
+      // S1「渐快急板」：攻击间隔 ×0.2（3.0→0.6s），每次 35%（4级）/40%（7级）法术伤害，持续 5 秒
+      const per = atk * SV(0.35, 0.40);
+      const si = interval20(0.6, d.aspd, 3);
+      const hits = Math.floor(5 / si);
+      return { normalDPS, skillDPS: (applyRes(per * d.dmgMult) + arcExtra(1, atk)) * hits / 5,
+        initSP: 5, costSP: SV(22, 19), dur: 5, atk };
     },
-    formula: ['面板 = 1412（初始）/ 1606（精锐）× (1 + 攻击类盟约%)',
-      'S3「寂静之声」：攻击力 +43%（4级）/+50%（7级）、攻速 +50/+60，只打精英/领袖，持续 30 秒',
+    formula: ['面板 = 1247（初始）/ 1525（精锐）× (1 + 攻击类盟约%)',
+      'S1「渐快急板」：攻击间隔 ×0.2（3.0→0.6 秒），每次攻击 35%（4级）/40%（7级）法术伤害，持续 5 秒',
       '天赋：攻击范围内每击倒 1 名敌人，莱塔尼亚/精准 +2 层（每回合至多 16 层）'] },
 
   { id: 'hx', name: '鸿雪', color: '#ff9ea8', use: ['sargon', 'precise', ...GEN, 'arc'],
@@ -828,8 +836,9 @@ function cycleOf(op, r) {
   const Rmax = (st.swift ? 12 : 0) + (swL >= 40 ? 15 : 0); // 单次最多可回
   // 概率加权：触发（p）时返还 R → 最快仍需 1 次攻击/1 秒；不触发（1-p）时按满消耗
   // 期望返还 = p × (消耗 − 最少 1 次)，这样 p=1 时仍保留最小循环，不会把概率当成必然
-  const refund = st.on.swift ? swP * Math.min(Math.max(0, costNow - 1), Rmax) : 0;
-  const cyc = cycle120(r.normalDPS, r.skillDPS, r.initSP, costNow, r.dur, r.regen || 1, refund, r.extra);
+  const quick = st.swift || st.on.swift;   // 本人是迅捷干员，或本页勾了迅捷盟约
+  const refund = quick ? swP * Math.min(Math.max(0, costNow - 1), Rmax) : 0;
+  const cyc = cycle120(r.normalDPS, r.skillDPS, r.initSP, costNow, r.dur, r.regen || 1, refund, r.extra, op.overlap);
   return { cyc: cyc, swP: swP, costMul: costMul };
 }
 
