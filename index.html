@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>卫戍协议 DPS 计算器 v1.52</title>
+<title>卫戍协议 DPS 计算器 v1.53</title>
 <style>
 :root { color-scheme: dark; font: 14px/1.55 system-ui, sans-serif; background: #10151d; color: #e4eaf3; }
 * { box-sizing: border-box; }
@@ -44,8 +44,8 @@ canvas { width: 100%; height: 300px; display: block; background: #101722; border
 </style>
 
 <header>
-  <small>ARKNIGHTS / 卫戍协议 · v1.52</small>
-  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.52</span></h1>
+  <small>ARKNIGHTS / 卫戍协议 · v1.53</small>
+  <h1>卫戍协议 DPS 计算器 <span class="ver">v1.53</span></h1>
   <div class="sub">16 名干员 · 全盟约 · 对比页 · 单文件离线可用 · <b style="color:#77dcc6">默认数据为 4 人终极难度</b></div>
 </header>
 
@@ -85,12 +85,17 @@ function applyRes(dmg) {
   return Math.max(dmg * (1 - res / 100), dmg * 0.05);
 }
 /* ===== 奥术统一：每段独立附加 ===== */
+let _boneM = 0;   // 骨刺刀：每段伤害额外附加 攻击力 x _boneM
 let _dmgM = 1;                                   // 当前页的「增伤乘区」（狙击镜/维多利亚/谢拉格…）
 let _arcR = 0;                                   // 每段奥术附伤倍率，update() 时按本页勾选刷新
 let _arcL = 0;                                   // 当前页奥术层数（3奥术减法抗用）
 function setArcR(st) { _arcR = st.on.arc ? (0.20 + 0.004 * st.L.arc) : 0; _arcL = st.L.arc; }   // 0 层勾选也有 20% 基础（用户确认）
 function arcExtra(segs, atk) {                    // segs 段，每段附加「攻击力 × 倍率」的法术伤害
-  return _arcR > 0 && segs > 0 ? applyRes(atk * segs * _arcR * _dmgM) : 0;
+  if (!(segs > 0)) return 0;
+  let v = 0;
+  if (_arcR > 0) v += applyRes(atk * segs * _arcR * _dmgM);
+  if (_boneM > 0) v += applyRes(atk * segs * _boneM * _dmgM);   // 骨刺刀
+  return v;
 }
 function interval20(baseSec, aspd, minF) {
   const s = Math.min(600, 100 + aspd) / 100;
@@ -870,7 +875,8 @@ function calc(op) {
   const s = Object.assign({}, st.L, { _x: st.x, _on: st.on, _ver: st.ver ? 1 : 0 });
   window._ver = s._ver ? 1 : 0;
   setArcR(st);                                  // 奥术附伤倍率按本页勾选刷新
-  _dmgM = d.dmgMult;                            // 增伤乘区（附加伤害也吃）
+  _dmgM = d.dmgMult;
+  _boneM = derive.eqBone ? derive.eqBone.times * derive.eqBone.mult : 0;                            // 增伤乘区（附加伤害也吃）
   const r = op.compute(s, d);
   const dot = iberiaDot(op, d, r);
   if (dot > 0) {
@@ -889,11 +895,7 @@ function calc(op) {
   }
   // 6 维多利亚的装备加成已并入 derive() 的 atkBonus（与精准/乌萨斯同乘区）
   // 装备：每次造成伤害额外 N 次攻击力 M% 法术伤害（骨刺刀）
-  if (derive.eqBone && r.atk) {
-    const seg = (SEGS[op.id] || [1, 1])[r.dur > 0 ? 1 : 0];
-    const add = applyRes(seg * derive.eqBone.times * derive.eqBone.mult * r.atk * d.dmgMult) / _iv;
-    r.normalDPS += add; r.skillDPS += add;
-  }
+  // 骨刺刀已在 arcExtra 内按段数计入
   // 装备：叠满后概率追击（攻击力 100% 范围物理伤害）
   if (derive.eqProc && r.atk) {
     const add = derive.eqProc.p * derive.eqProc.mult * r.atk * d.dmgMult / _iv;
